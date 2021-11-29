@@ -87,4 +87,16 @@ namespace mr
     vertices[5].uv = {g.uv1[0], g.uv1[1]};
   }
 
+  void grid_cell::set_position(int32_t x, int32_t y)
+  {
+    const float fx = x;
+    const float fy = y;
+    vertices[0].position = {fx, fy};
+    vertices[1].position = {fx, fy + 1.0f};
+    vertices[2].position = {fx + 1.0f, fy};
+    vertices[3].position = {fx, fy + 1.0f};
+    vertices[4].position = {fx + 1.0f, fy + 1.0f};
+    vertices[5].position = {fx + 1.0f, fy};
+  }
+
 }

@@ -74,6 +74,7 @@ namespace mr
 
     void set_color(const vec3f& c);
     void set_glyph(const glyph& g);
+    void set_position(int32_t x, int32_t y);
 
   };
 

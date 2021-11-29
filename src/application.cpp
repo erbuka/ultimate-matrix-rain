@@ -120,21 +120,7 @@ namespace mr
 
     for (std::int32_t y = 0; y < rows; ++y)
       for (std::int32_t x = 0; x < cols; ++x)
-      {
-        const size_t idx = y * cols + x;
-
-        const float fx = x;
-        const float fy = y;
-
-        // Actually loving designated initializers
-
-        s_grid[idx][0].position = {fx, fy};
-        s_grid[idx][1].position = {fx, fy + 1.0f};
-        s_grid[idx][2].position = {fx + 1.0f, fy};
-        s_grid[idx][3].position = {fx, fy + 1.0f};
-        s_grid[idx][4].position = {fx + 1.0f, fy + 1.0f};
-        s_grid[idx][5].position = {fx + 1.0f, fy};
-      }
+        s_grid[y * cols + x].set_position(x, y);
   }
 
   static void render(const float dt)
@@ -155,7 +141,7 @@ namespace mr
 
       for (int32_t y = std::max(0, min_y); y <= max_y && y < rows; ++y)
       {
-        const vec3f color = vec3f{0.0f, 1.0f, 0.0f}  * (float(y - min_y) / (max_y - min_y));
+        const vec3f color = vec3f{0.0f, 1.0f, 0.0f} * (float(y - min_y) / (max_y - min_y));
         s_grid[y * cols + s.x].set_color(color);
       }
 
