@@ -1,8 +1,6 @@
 #include "application.h"
 
-#include <cstdlib>
 #include <algorithm>
-#include <cassert>
 #include <chrono>
 #include <cmath>
 #include <tuple>
@@ -10,61 +8,18 @@
 #include <iostream>
 #include <vector>
 #include <concepts>
-#include <string_view>
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+
+#include "common.h"
+#include "font.h"
 
 // TODO: hdr with additive coloring
 // TODO: smooth out the falling movement
 
 namespace mr
 {
-
-  // Generic vector type, just testing some C++20 concepts
-  template <std::size_t N, typename T>
-  requires std::floating_point<T> || std::integral<T>
-  struct vec2
-  {
-    std::array<T, N> components = {T(0)};
-
-    constexpr vec2 operator+(const vec2 &v)
-    {
-      vec2 r;
-      for (std::size_t i = 0; i < N; ++i)
-        r.components[i] = components[i] + v.components[i];
-      return r;
-    }
-
-    constexpr vec2 operator-(const vec2 &v)
-    {
-      vec2 r;
-      for (std::size_t i = 0; i < N; ++i)
-        r.components[i] = components[i] + v.components[i];
-      return r;
-    }
-
-    template <typename S>
-    requires std::is_convertible_v<S, T>
-        vec2 operator*(const S s)
-    {
-      vec2 r;
-      for (std::size_t i = 0; i < N; ++i)
-        r.components[i] = components[i] * T(s);
-      return r;
-    }
-  };
-
-  using vec2f = vec2<2, float>;
-  using vec3f = vec2<3, float>;
-  using vec4f = vec2<4, float>;
-
-  struct vertex
-  {
-    vec2f position;
-    vec2f uv;
-    vec4f color;
-  };
 
   struct falling_string
   {
@@ -77,7 +32,7 @@ namespace mr
   static constexpr std::int32_t s_col_count = 100;
   static constexpr std::int32_t s_falling_strings_count = 200;
   static constexpr std::int32_t s_falling_string_min_length = 5;
-  static constexpr std::int32_t s_falling_string_max_length = 20;
+  static constexpr std::int32_t s_falling_string_max_length = 50;
   static constexpr std::int32_t s_falling_string_min_speed = 5;
   static constexpr std::int32_t s_falling_string_max_speed = 20;
 
@@ -108,13 +63,16 @@ namespace mr
   static constexpr std::string_view s_fragment_source = R"(
     #version 330
 
+    uniform sampler2D uFont;
+
     smooth in vec2 fUv;
     flat in vec4 fColor;
     
     out vec4 oColor;
 
     void main() {
-      oColor = fColor;
+      float mask = texture(uFont, fUv).r;
+      oColor = vec4(fColor.rgb, fColor.a * mask);
     }
   )";
 
@@ -124,6 +82,7 @@ namespace mr
   static GLuint s_vb = 0; // Vertex Buffer
   static std::vector<vertex> s_vertices;
   static std::array<falling_string, s_falling_strings_count> s_falling_strings;
+  static font s_font;
 
   // Randomly initialize a falling string. I just use the stantard rand(), it's enough for this project
   static void init_falling_string(falling_string &s)
@@ -135,84 +94,11 @@ namespace mr
     s.y = -s.length + rand() % s_falling_string_max_length;
   }
 
-  static void terminate(const int32_t exit_code)
-  {
-    glfwTerminate();
-    exit(exit_code);
-  }
-
   static auto get_window_size()
   {
     int32_t x, y;
     glfwGetWindowSize(s_window, &x, &y);
     return std::tuple{float(x), float(y)};
-  }
-
-  static void terminate_with_error(std::string_view descr)
-  {
-    std::cerr << descr << '\n';
-    terminate(-1);
-  }
-
-  static auto load_shader(const std::string_view source, const GLenum type)
-  {
-    const auto shader = glCreateShader(type);
-
-    const GLchar *src = source.data();
-    const GLint len = source.size();
-
-    glShaderSource(shader, 1, &src, &len);
-
-    glCompileShader(shader);
-
-    GLint is_compiled = 0;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &is_compiled);
-    if (is_compiled == GL_FALSE)
-    {
-      GLint max_length = 0;
-      glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &max_length);
-
-      std::string error_log;
-      error_log.resize(max_length);
-      glGetShaderInfoLog(shader, max_length, &max_length, error_log.data());
-
-      terminate_with_error(error_log);
-    }
-
-    return shader;
-  }
-
-  static auto load_program(const std::string_view vs_source, const std::string_view fs_source)
-  {
-    const auto program = glCreateProgram();
-
-    const auto vs = load_shader(vs_source, GL_VERTEX_SHADER);
-    const auto fs = load_shader(fs_source, GL_FRAGMENT_SHADER);
-
-    glAttachShader(program, vs);
-    glAttachShader(program, fs);
-
-    glLinkProgram(program);
-
-    GLint is_linked;
-    glGetProgramiv(program, GL_LINK_STATUS, &is_linked);
-
-    if (is_linked == GL_FALSE)
-    {
-      GLint max_length = 0;
-      glGetProgramiv(program, GL_INFO_LOG_LENGTH, &max_length);
-
-      std::string error_log;
-      error_log.resize(max_length);
-      glGetProgramInfoLog(program, max_length, &max_length, error_log.data());
-
-      terminate_with_error(error_log);
-    }
-
-    glDetachShader(program, vs);
-    glDetachShader(program, fs);
-
-    return program;
   }
 
   /*
@@ -242,13 +128,12 @@ namespace mr
 
         // Actually loving designated initializers
 
-        s_vertices[start_idx + 0] = {.position = {fx, fy}, .uv = {0.0f, 0.0f}, .color = {0.0f, 0.0f, 0.0f, 1.0f}};
-        s_vertices[start_idx + 1] = {.position = {fx, fy + 1.0f}, .uv = {0.0f, 1.0f}, .color = {0.0f, 0.0f, 0.0f, 1.0f}};
-        s_vertices[start_idx + 2] = {.position = {fx + 1.0f, fy}, .uv = {1.0f, 0.0f}, .color = {0.0f, 0.0f, 0.0f, 1.0f}};
-
-        s_vertices[start_idx + 3] = {.position = {fx, fy + 1.0f}, .uv = {0.0f, 1.0f}, .color = {0.0f, 0.0f, 0.0f, 1.0f}};
-        s_vertices[start_idx + 4] = {.position = {fx + 1.0f, fy + 1.0f}, .uv = {1.0f, 1.0f}, .color = {0.0f, 0.0f, 0.0f, 1.0f}};
-        s_vertices[start_idx + 5] = {.position = {fx + 1.0f, fy}, .uv = {1.0f, 0.0f}, .color = {0.0f, 0.0f, 0.0f, 1.0f}};
+        s_vertices[start_idx + 0].position = {fx, fy};
+        s_vertices[start_idx + 1].position = {fx, fy + 1.0f};
+        s_vertices[start_idx + 2].position = {fx + 1.0f, fy};
+        s_vertices[start_idx + 3].position = {fx, fy + 1.0f};
+        s_vertices[start_idx + 4].position = {fx + 1.0f, fy + 1.0f};
+        s_vertices[start_idx + 5].position = {fx + 1.0f, fy};
       }
   }
 
@@ -279,7 +164,7 @@ namespace mr
       s.y += dt * s.speed;
 
       // If the string is out of screen, reset it
-      if (min_y >= rows)  
+      if (min_y >= rows)
         init_falling_string(s);
     }
 
@@ -290,14 +175,31 @@ namespace mr
 
     glUseProgram(s_program);
 
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, s_font.get_texture());
+
     glUniform1f(glGetUniformLocation(s_program, "uCols"), cols);
     glUniform1f(glGetUniformLocation(s_program, "uRows"), rows);
+    glUniform1i(glGetUniformLocation(s_program, "uFont"), 0);
 
     glBindVertexArray(s_va);
     glBindBuffer(GL_ARRAY_BUFFER, s_vb);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertex) * s_vertices.size(), s_vertices.data(), GL_DYNAMIC_DRAW);
 
     glDrawArrays(GL_TRIANGLES, 0, s_vertices.size());
+  }
+
+  static void assign_random_glyph(vertex *base_vertex)
+  {
+    const auto &glyphs = s_font.get_glyphs();
+    const auto &g = glyphs[rand() % glyphs.size()];
+
+    base_vertex[0].uv = {g.uv0[0], g.uv1[1]};
+    base_vertex[1].uv = {g.uv0[0], g.uv0[1]};
+    base_vertex[2].uv = {g.uv1[0], g.uv1[1]};
+    base_vertex[3].uv = {g.uv0[0], g.uv0[1]};
+    base_vertex[4].uv = {g.uv1[0], g.uv0[1]};
+    base_vertex[5].uv = {g.uv1[0], g.uv1[1]};
   }
 
   static void initialize()
@@ -325,9 +227,33 @@ namespace mr
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    // Load font
+    s_font.load("assets/font.ttf");
+
     // Resize vertices
     resize_vertices();
 
+    // Fill the grid with random glyphs
+    const auto [cols, rows] = get_grid_size();
+    const auto &glyphs = s_font.get_glyphs();
+
+    for (std::size_t i = 0; i < cols * rows; ++i)
+      assign_random_glyph(&s_vertices[i * 6]);
+
+    /*
+    for (std::size_t i = 0; i < cols * rows; ++i)
+    {
+      const auto &g = glyphs[rand() % glyphs.size()];
+
+      s_vertices[i * 6 + 0].uv = {g.uv0[0], g.uv1[1]};
+      s_vertices[i * 6 + 1].uv = {g.uv0[0], g.uv0[1]};
+      s_vertices[i * 6 + 2].uv = {g.uv1[0], g.uv1[1]};
+
+      s_vertices[i * 6 + 3].uv = {g.uv0[0], g.uv0[1]};
+      s_vertices[i * 6 + 4].uv = {g.uv1[0], g.uv0[1]};
+      s_vertices[i * 6 + 5].uv = {g.uv1[0], g.uv1[1]};
+    }
+*/
     // Initilize falling strings
     for (auto &s : s_falling_strings)
       init_falling_string(s);
@@ -337,6 +263,18 @@ namespace mr
   {
     // When the window is resized, we actually need to resize the grid too
     resize_vertices();
+  }
+
+  static void terminate(const int32_t exit_code)
+  {
+    glfwTerminate();
+    exit(exit_code);
+  }
+
+  void terminate_with_error(std::string_view descr)
+  {
+    std::cerr << descr << '\n';
+    terminate(-1);
   }
 
   void run()
@@ -349,7 +287,7 @@ namespace mr
       terminate_with_error("Could not initialize GLFW");
 
     /* Create a windowed mode window and its OpenGL context */
-    s_window = glfwCreateWindow(640, 480, "Hello World", NULL, NULL);
+    s_window = glfwCreateWindow(1280, 768, "Hello World", NULL, NULL);
     if (!s_window)
       terminate_with_error("Could not create window");
 

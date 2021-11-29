@@ -98,7 +98,8 @@ project "MatrixRain"
     includedirs {
         "src",
         "vendor/glad/include",
-        "vendor/glfw/include"
+        "vendor/glfw/include",
+        "vendor/stb"
     }
 
     files { "src/**.cpp" }
