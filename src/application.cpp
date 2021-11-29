@@ -44,10 +44,10 @@ namespace mr
 
     layout(location = 0) in vec2 aPosition;
     layout(location = 1) in vec2 aUv;
-    layout(location = 2) in vec4 aColor;
+    layout(location = 2) in vec3 aColor;
 
     smooth out vec2 fUv;
-    flat out vec4 fColor;
+    flat out vec3 fColor;
 
     void main() {
       vec2 ndcPos;
@@ -66,13 +66,13 @@ namespace mr
     uniform sampler2D uFont;
 
     smooth in vec2 fUv;
-    flat in vec4 fColor;
+    flat in vec3 fColor;
     
     out vec4 oColor;
 
     void main() {
       float mask = texture(uFont, fUv).r;
-      oColor = vec4(fColor.rgb, fColor.a * mask);
+      oColor = vec4(fColor * mask, 1.0);
     }
   )";
 
@@ -80,7 +80,7 @@ namespace mr
   static GLuint s_program = 0;
   static GLuint s_va = 0; // Vertex Array
   static GLuint s_vb = 0; // Vertex Buffer
-  static std::vector<vertex> s_vertices;
+  static std::vector<grid_cell> s_grid;
   static std::array<falling_string, s_falling_strings_count> s_falling_strings;
   static font s_font;
 
@@ -116,24 +116,24 @@ namespace mr
   {
     const auto [cols, rows] = get_grid_size();
 
-    s_vertices.resize(cols * rows * 6);
+    s_grid.resize(cols * rows);
 
     for (std::int32_t y = 0; y < rows; ++y)
       for (std::int32_t x = 0; x < cols; ++x)
       {
-        const size_t start_idx = (y * cols + x) * 6;
+        const size_t idx = y * cols + x;
 
         const float fx = x;
         const float fy = y;
 
         // Actually loving designated initializers
 
-        s_vertices[start_idx + 0].position = {fx, fy};
-        s_vertices[start_idx + 1].position = {fx, fy + 1.0f};
-        s_vertices[start_idx + 2].position = {fx + 1.0f, fy};
-        s_vertices[start_idx + 3].position = {fx, fy + 1.0f};
-        s_vertices[start_idx + 4].position = {fx + 1.0f, fy + 1.0f};
-        s_vertices[start_idx + 5].position = {fx + 1.0f, fy};
+        s_grid[idx][0].position = {fx, fy};
+        s_grid[idx][1].position = {fx, fy + 1.0f};
+        s_grid[idx][2].position = {fx + 1.0f, fy};
+        s_grid[idx][3].position = {fx, fy + 1.0f};
+        s_grid[idx][4].position = {fx + 1.0f, fy + 1.0f};
+        s_grid[idx][5].position = {fx + 1.0f, fy};
       }
   }
 
@@ -143,8 +143,9 @@ namespace mr
     const auto [cols, rows] = get_grid_size();
 
     // Set all cells to black
-    for (auto &v : s_vertices)
-      v.color = {0.0f, 0.0f, 0.0f, 1.0f};
+    for (auto &cell : s_grid)
+      for (auto &v : cell)
+        v.color = {0.0f, 0.0f, 0.0f};
 
     // Compute colors based on falling strings
     for (auto &s : s_falling_strings)
@@ -154,10 +155,8 @@ namespace mr
 
       for (int32_t y = std::max(0, min_y); y <= max_y && y < rows; ++y)
       {
-        const int32_t start_idx = (y * cols + s.x) * 6;
-        const vec4f color = {0.0f, 1.0f, 0.0f, float(y - min_y) / (max_y - min_y)};
-        for (int32_t i = 0; i < 6; ++i)
-          s_vertices[start_idx + i].color = color;
+        const vec3f color = vec3f{0.0f, 1.0f, 0.0f}  * (float(y - min_y) / (max_y - min_y));
+        s_grid[y * cols + s.x].set_color(color);
       }
 
       // Move this string down
@@ -184,22 +183,16 @@ namespace mr
 
     glBindVertexArray(s_va);
     glBindBuffer(GL_ARRAY_BUFFER, s_vb);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertex) * s_vertices.size(), s_vertices.data(), GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(grid_cell) * s_grid.size(), s_grid.data(), GL_DYNAMIC_DRAW);
 
-    glDrawArrays(GL_TRIANGLES, 0, s_vertices.size());
+    glDrawArrays(GL_TRIANGLES, 0, s_grid.size() * 6);
   }
 
-  static void assign_random_glyph(vertex *base_vertex)
+  static void assign_random_glyph(grid_cell &cell)
   {
     const auto &glyphs = s_font.get_glyphs();
     const auto &g = glyphs[rand() % glyphs.size()];
-
-    base_vertex[0].uv = {g.uv0[0], g.uv1[1]};
-    base_vertex[1].uv = {g.uv0[0], g.uv0[1]};
-    base_vertex[2].uv = {g.uv1[0], g.uv1[1]};
-    base_vertex[3].uv = {g.uv0[0], g.uv0[1]};
-    base_vertex[4].uv = {g.uv1[0], g.uv0[1]};
-    base_vertex[5].uv = {g.uv1[0], g.uv1[1]};
+    cell.set_glyph(g);
   }
 
   static void initialize()
@@ -220,12 +213,10 @@ namespace mr
 
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(vertex), (const void *)0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(vertex), (const void *)8);
-    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(vertex), (const void *)16);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(vertex), (const void *)16);
 
     // Init some OpenGL stuff
     glDisable(GL_DEPTH_TEST);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // Load font
     s_font.load("assets/font.ttf");
@@ -234,26 +225,9 @@ namespace mr
     resize_vertices();
 
     // Fill the grid with random glyphs
-    const auto [cols, rows] = get_grid_size();
-    const auto &glyphs = s_font.get_glyphs();
+    for (auto &cell : s_grid)
+      assign_random_glyph(cell);
 
-    for (std::size_t i = 0; i < cols * rows; ++i)
-      assign_random_glyph(&s_vertices[i * 6]);
-
-    /*
-    for (std::size_t i = 0; i < cols * rows; ++i)
-    {
-      const auto &g = glyphs[rand() % glyphs.size()];
-
-      s_vertices[i * 6 + 0].uv = {g.uv0[0], g.uv1[1]};
-      s_vertices[i * 6 + 1].uv = {g.uv0[0], g.uv0[1]};
-      s_vertices[i * 6 + 2].uv = {g.uv1[0], g.uv1[1]};
-
-      s_vertices[i * 6 + 3].uv = {g.uv0[0], g.uv0[1]};
-      s_vertices[i * 6 + 4].uv = {g.uv1[0], g.uv0[1]};
-      s_vertices[i * 6 + 5].uv = {g.uv1[0], g.uv1[1]};
-    }
-*/
     // Initilize falling strings
     for (auto &s : s_falling_strings)
       init_falling_string(s);
@@ -263,6 +237,10 @@ namespace mr
   {
     // When the window is resized, we actually need to resize the grid too
     resize_vertices();
+
+    // Fill the grid with random glyphs
+    for (auto &cell : s_grid)
+      assign_random_glyph(cell);
   }
 
   static void terminate(const int32_t exit_code)

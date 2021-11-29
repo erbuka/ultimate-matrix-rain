@@ -2,8 +2,6 @@
 
 #include <algorithm>
 #include <fstream>
-#include <filesystem> //TODO remove this
-#include <iostream>   //TODO remove this
 
 #define STB_TRUETYPE_IMPLEMENTATION
 #include <stb_truetype.h>

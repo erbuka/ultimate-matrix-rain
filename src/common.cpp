@@ -1,10 +1,11 @@
 #include "common.h"
 
-
 #include <string>
+
 #include <GLFW/glfw3.h>
 
 #include "application.h"
+#include "font.h"
 
 namespace mr
 {
@@ -68,6 +69,22 @@ namespace mr
     glDetachShader(program, fs);
 
     return program;
+  }
+
+  void grid_cell::set_color(const vec3f &c)
+  {
+    for (auto &v : vertices)
+      v.color = c;
+  }
+
+  void grid_cell::set_glyph(const glyph &g)
+  {
+    vertices[0].uv = {g.uv0[0], g.uv1[1]};
+    vertices[1].uv = {g.uv0[0], g.uv0[1]};
+    vertices[2].uv = {g.uv1[0], g.uv1[1]};
+    vertices[3].uv = {g.uv0[0], g.uv0[1]};
+    vertices[4].uv = {g.uv1[0], g.uv0[1]};
+    vertices[5].uv = {g.uv1[0], g.uv1[1]};
   }
 
 }
