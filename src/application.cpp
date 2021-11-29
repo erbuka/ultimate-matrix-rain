@@ -129,13 +129,16 @@ namespace mr
   {
     const auto [w, h] = get_window_size();
 
+    constexpr float screen_width = s_col_count;
+    const float screen_height = h / w * screen_width;
+
     // Clear our cells
     s_grid.clear();
 
     // Compute colors based on falling strings
     for (auto &s : s_falling_strings)
     {
-      const float cell_size = w / s_col_count * s.depth;
+      const float cell_size = screen_width / s_col_count * s.depth;
       const int32_t max_y = std::round(s.y);
       const int32_t min_y = max_y - s.length + 1;
 
@@ -169,8 +172,8 @@ namespace mr
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, s_font.get_texture());
 
-    glUniform1f(glGetUniformLocation(s_program, "uScreenWidth"), w);
-    glUniform1f(glGetUniformLocation(s_program, "uScreenHeight"), h);
+    glUniform1f(glGetUniformLocation(s_program, "uScreenWidth"), screen_width);
+    glUniform1f(glGetUniformLocation(s_program, "uScreenHeight"), screen_height);
     glUniform1i(glGetUniformLocation(s_program, "uFont"), 0);
 
     glBindVertexArray(s_va);
