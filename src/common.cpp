@@ -71,7 +71,7 @@ namespace mr
     return program;
   }
 
-  void grid_cell::set_color(const vec3f &c)
+  void grid_cell::set_color(const vec4f &c)
   {
     for (auto &v : vertices)
       v.color = c;
@@ -87,16 +87,18 @@ namespace mr
     vertices[5].uv = {g.uv1[0], g.uv1[1]};
   }
 
-  void grid_cell::set_position(int32_t x, int32_t y)
+  void grid_cell::set_position(const vec2f pixel_pos, const float pixel_size)
   {
-    const float fx = x;
-    const float fy = y;
+
+    const float fx = pixel_pos[0];
+    const float fy = pixel_pos[1];
+
     vertices[0].position = {fx, fy};
-    vertices[1].position = {fx, fy + 1.0f};
-    vertices[2].position = {fx + 1.0f, fy};
-    vertices[3].position = {fx, fy + 1.0f};
-    vertices[4].position = {fx + 1.0f, fy + 1.0f};
-    vertices[5].position = {fx + 1.0f, fy};
+    vertices[1].position = {fx, fy + pixel_size};
+    vertices[2].position = {fx + pixel_size, fy};
+    vertices[3].position = {fx, fy + pixel_size};
+    vertices[4].position = {fx + pixel_size, fy + pixel_size};
+    vertices[5].position = {fx + pixel_size, fy};
   }
 
 }

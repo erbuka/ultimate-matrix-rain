@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <cmath>
 #include <array>
 #include <cstdlib>
 #include <string_view>
@@ -16,51 +18,62 @@ namespace mr
   // Generic vector type, just testing some C++20 concepts
   template <std::size_t N, typename T>
   requires std::floating_point<T> || std::integral<T>
-  struct vec2
+  struct vec
   {
     std::array<T, N> components = {T(0)};
 
-    constexpr vec2 operator+(const vec2 &v)
+    vec() = default;
+
+    constexpr vec(const std::initializer_list<T> &l)
     {
-      vec2 r;
+      std::ranges::copy(l, components.begin());
+    }
+
+    constexpr vec(const vec<N - 1, T> &v, T x)
+    {
+      std::ranges::copy(v.components, components.begin());
+      components.back() = x;
+    }
+
+    constexpr vec operator+(const vec &v) const
+    {
+      vec r;
+      for (std::size_t i = 0; i < N; ++i)
+        r.components[i] = components[i] + v.components[i];
+
+      return r;
+    }
+
+    constexpr vec operator-(const vec &v) const
+    {
+      vec r;
       for (std::size_t i = 0; i < N; ++i)
         r.components[i] = components[i] + v.components[i];
       return r;
     }
-
-    constexpr vec2 operator-(const vec2 &v)
-    {
-      vec2 r;
-      for (std::size_t i = 0; i < N; ++i)
-        r.components[i] = components[i] + v.components[i];
-      return r;
-    }
-
-    constexpr auto operator[](size_t i) const { return components[i]; }
 
     template <typename S>
     requires std::is_convertible_v<S, T>
-        vec2 operator*(const S s)
+        vec operator*(const S s) const
     {
-      vec2 r;
+      vec r;
       for (std::size_t i = 0; i < N; ++i)
         r.components[i] = components[i] * T(s);
       return r;
     }
+
+    constexpr auto operator[](size_t i) const { return components[i]; }
   };
 
-
-  using vec2f = vec2<2, float>;
-  using vec3f = vec2<3, float>;
-  using vec4f = vec2<4, float>;
-
-
+  using vec2f = vec<2, float>;
+  using vec3f = vec<3, float>;
+  using vec4f = vec<4, float>;
 
   struct vertex
   {
     vec2f position;
     vec2f uv;
-    vec3f color;
+    vec4f color;
   };
 
   struct grid_cell
@@ -72,10 +85,27 @@ namespace mr
     auto begin() { return vertices.begin(); }
     auto end() { return vertices.end(); }
 
-    void set_color(const vec3f& c);
-    void set_glyph(const glyph& g);
-    void set_position(int32_t x, int32_t y);
+    void set_color(const vec4f &c);
+    void set_glyph(const glyph &g);
+    void set_position(const vec2f pixel_pos, const float pixel_size);
+  };
 
+  template <std::size_t N>
+  struct color_palette
+  {
+    const std::array<vec3f, N> colors;
+
+    const vec3f get(const float t) const
+    {
+      const int32_t idx0 = t * (N - 1);
+      if (idx0 >= N - 1)
+        return colors[N - 1];
+      else
+      {
+        const float t0 = t * (N - 1) - idx0;
+        return colors[idx0] * (1.0f - t0) + colors[idx0 + 1] * t0;
+      }
+    }
   };
 
   GLuint load_program(const std::string_view vs_source, const std::string_view fs_source);

@@ -16,7 +16,6 @@
 #include "font.h"
 
 // TODO: hdr with additive coloring
-// TODO: smooth out the falling movement
 
 namespace mr
 {
@@ -26,33 +25,36 @@ namespace mr
     std::int32_t x = 0.0f;
     float y = 0.0f;
     float speed = 0.0f;
+    float depth = 1.0f;
     std::int32_t length = 0;
   };
 
   static constexpr std::int32_t s_col_count = 100;
-  static constexpr std::int32_t s_falling_strings_count = 200;
+  static constexpr float s_falling_strings_min_depth = 0.25f;
+  static constexpr float s_falling_strings_max_depth = 1.0f;
+  static constexpr std::int32_t s_falling_strings_count = 1000;
   static constexpr std::int32_t s_falling_string_min_length = 5;
   static constexpr std::int32_t s_falling_string_max_length = 50;
-  static constexpr std::int32_t s_falling_string_min_speed = 5;
-  static constexpr std::int32_t s_falling_string_max_speed = 20;
+  static constexpr std::int32_t s_falling_string_min_speed = 10;
+  static constexpr std::int32_t s_falling_string_max_speed = 30;
 
   static constexpr std::string_view s_vertex_source = R"(
     #version 330
 
-    uniform float uCols;
-    uniform float uRows;
+    uniform float uScreenWidth;
+    uniform float uScreenHeight;
 
     layout(location = 0) in vec2 aPosition;
     layout(location = 1) in vec2 aUv;
-    layout(location = 2) in vec3 aColor;
+    layout(location = 2) in vec4 aColor;
 
     smooth out vec2 fUv;
-    flat out vec3 fColor;
+    flat out vec4 fColor;
 
     void main() {
       vec2 ndcPos;
-      ndcPos.x = (aPosition.x / uCols) * 2.0 - 1.0;
-      ndcPos.y = (aPosition.y / uRows) * -2.0 + 1.0;
+      ndcPos.x = (aPosition.x / uScreenWidth) * 2.0 - 1.0;
+      ndcPos.y = (aPosition.y / uScreenHeight) * -2.0 + 1.0;
 
       gl_Position = vec4(ndcPos, 0.0, 1.0);
       fUv = aUv;
@@ -66,15 +68,28 @@ namespace mr
     uniform sampler2D uFont;
 
     smooth in vec2 fUv;
-    flat in vec3 fColor;
+    flat in vec4 fColor;
     
     out vec4 oColor;
 
     void main() {
       float mask = texture(uFont, fUv).r;
-      oColor = vec4(fColor * mask, 1.0);
+      oColor = vec4(fColor.rgb, fColor.a * mask);
     }
   )";
+
+  static constexpr color_palette<10> s_color_palette = {
+      vec3f{0.0f, 1.0f, 0.0f},
+      vec3f{0.0f, 1.0f, 0.0f},
+      vec3f{0.0f, 1.0f, 0.0f},
+      vec3f{0.0f, 1.0f, 0.0f},
+      vec3f{0.0f, 1.0f, 0.0f},
+      vec3f{0.0f, 1.0f, 0.0f},
+      vec3f{0.0f, 1.0f, 0.0f},
+      vec3f{0.0f, 1.0f, 0.0f},
+      vec3f{1.0f, 1.0f, 1.0f},
+      vec3f{1.0f, 1.0f, 1.0f},
+  };
 
   static GLFWwindow *s_window = nullptr;
   static GLuint s_program = 0;
@@ -87,11 +102,13 @@ namespace mr
   // Randomly initialize a falling string. I just use the stantard rand(), it's enough for this project
   static void init_falling_string(falling_string &s)
   {
+    s.depth = std::pow(s_falling_strings_min_depth + rand() / float(RAND_MAX) * (s_falling_strings_max_depth - s_falling_strings_min_depth), 3);
     s.speed = s_falling_string_min_speed + rand() % (s_falling_string_max_speed - s_falling_string_min_speed);
     s.length = s_falling_string_min_length + rand() % (s_falling_string_max_length - s_falling_string_min_length);
-    s.x = rand() % s_col_count;
+    s.x = (rand() % s_col_count) / s.depth;
+
     // The initial y position is actually randomized to be off screen. This gives more variance at the start of the program
-    s.y = -s.length + rand() % s_falling_string_max_length;
+    s.y = -(s.length + rand() % s_falling_string_max_length);
   }
 
   static auto get_window_size()
@@ -101,55 +118,44 @@ namespace mr
     return std::tuple{float(x), float(y)};
   }
 
-  /*
-  The number of columns is constant, and the number of rows is calculated based on the window aspect ratio
-  */
-  static auto get_grid_size()
+  static const glyph &get_random_glyph(int32_t x, int32_t y, float depth)
   {
-    const auto [w, h] = get_window_size();
-    const float col_size = w / float(s_col_count);
-    const std::int32_t row_count = std::ceil(h / col_size);
-    return std::tuple{s_col_count, row_count};
-  }
-
-  static void resize_vertices()
-  {
-    const auto [cols, rows] = get_grid_size();
-
-    s_grid.resize(cols * rows);
-
-    for (std::int32_t y = 0; y < rows; ++y)
-      for (std::int32_t x = 0; x < cols; ++x)
-        s_grid[y * cols + x].set_position(x, y);
+    const auto &glyphs = s_font.get_glyphs();
+    const auto idx = static_cast<std::size_t>(float(x * s_col_count + y) * (1.0f + depth)) % glyphs.size();
+    return glyphs[idx];
   }
 
   static void render(const float dt)
   {
     const auto [w, h] = get_window_size();
-    const auto [cols, rows] = get_grid_size();
 
-    // Set all cells to black
-    for (auto &cell : s_grid)
-      for (auto &v : cell)
-        v.color = {0.0f, 0.0f, 0.0f};
+    // Clear our cells
+    s_grid.clear();
 
     // Compute colors based on falling strings
     for (auto &s : s_falling_strings)
     {
+      const float cell_size = w / s_col_count * s.depth;
       const int32_t max_y = std::round(s.y);
       const int32_t min_y = max_y - s.length + 1;
 
-      for (int32_t y = std::max(0, min_y); y <= max_y && y < rows; ++y)
+      for (int32_t y = min_y; y <= max_y; ++y)
       {
-        const vec3f color = vec3f{0.0f, 1.0f, 0.0f} * (float(y - min_y) / (max_y - min_y));
-        s_grid[y * cols + s.x].set_color(color);
+        const float t = float(y - min_y) / (max_y - min_y);
+
+        grid_cell cell;
+        cell.set_color({ s_color_palette.get(t), t * s.depth});
+        cell.set_glyph(get_random_glyph(s.x, y, s.depth));
+        cell.set_position(vec2f{float(s.x), float(y)} * cell_size, cell_size);
+
+        s_grid.push_back(cell);
       }
 
       // Move this string down
       s.y += dt * s.speed;
 
       // If the string is out of screen, reset it
-      if (min_y >= rows)
+      if (min_y * cell_size >= h)
         init_falling_string(s);
     }
 
@@ -163,8 +169,8 @@ namespace mr
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, s_font.get_texture());
 
-    glUniform1f(glGetUniformLocation(s_program, "uCols"), cols);
-    glUniform1f(glGetUniformLocation(s_program, "uRows"), rows);
+    glUniform1f(glGetUniformLocation(s_program, "uScreenWidth"), w);
+    glUniform1f(glGetUniformLocation(s_program, "uScreenHeight"), h);
     glUniform1i(glGetUniformLocation(s_program, "uFont"), 0);
 
     glBindVertexArray(s_va);
@@ -172,13 +178,6 @@ namespace mr
     glBufferData(GL_ARRAY_BUFFER, sizeof(grid_cell) * s_grid.size(), s_grid.data(), GL_DYNAMIC_DRAW);
 
     glDrawArrays(GL_TRIANGLES, 0, s_grid.size() * 6);
-  }
-
-  static void assign_random_glyph(grid_cell &cell)
-  {
-    const auto &glyphs = s_font.get_glyphs();
-    const auto &g = glyphs[rand() % glyphs.size()];
-    cell.set_glyph(g);
   }
 
   static void initialize()
@@ -199,20 +198,15 @@ namespace mr
 
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(vertex), (const void *)0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(vertex), (const void *)8);
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(vertex), (const void *)16);
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(vertex), (const void *)16);
 
     // Init some OpenGL stuff
     glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // Load font
     s_font.load("assets/font.ttf");
-
-    // Resize vertices
-    resize_vertices();
-
-    // Fill the grid with random glyphs
-    for (auto &cell : s_grid)
-      assign_random_glyph(cell);
 
     // Initilize falling strings
     for (auto &s : s_falling_strings)
@@ -221,12 +215,6 @@ namespace mr
 
   static void on_window_resize(GLFWwindow *window, int32_t w, int32_t h)
   {
-    // When the window is resized, we actually need to resize the grid too
-    resize_vertices();
-
-    // Fill the grid with random glyphs
-    for (auto &cell : s_grid)
-      assign_random_glyph(cell);
   }
 
   static void terminate(const int32_t exit_code)
