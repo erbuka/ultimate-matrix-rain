@@ -71,6 +71,33 @@ namespace mr
     return program;
   }
 
+  std::tuple<GLuint, GLuint> create_full_screen_quad()
+  {
+    static constexpr std::array<vec2f, 6> s_full_screen_quad = {
+        vec2f{0.0f, 0.0f},
+        vec2f{1.0f, 0.0f},
+        vec2f{1.0f, 1.0f},
+        vec2f{0.0f, 0.0f},
+        vec2f{1.0f, 1.0f},
+        vec2f{0.0f, 1.0f},
+    };
+
+    GLuint va, vb;
+
+    glGenVertexArrays(1, &va);
+    glGenBuffers(1, &vb);
+
+    glBindVertexArray(va);
+    glBindBuffer(GL_ARRAY_BUFFER, vb);
+
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vec2f) * s_full_screen_quad.size(), s_full_screen_quad.data(), GL_STATIC_DRAW);
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(vec2f), 0);
+
+    return std::tuple{va, vb};
+  }
+
   void grid_cell::set_color(const vec4f &c)
   {
     for (auto &v : vertices)

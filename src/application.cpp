@@ -1,5 +1,6 @@
 #include "application.h"
 
+#include <memory>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -12,6 +13,7 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#include "filter.h"
 #include "common.h"
 #include "font.h"
 
@@ -38,7 +40,34 @@ namespace mr
   static constexpr std::int32_t s_falling_string_min_speed = 10;
   static constexpr std::int32_t s_falling_string_max_speed = 30;
 
-  static constexpr std::string_view s_vertex_source = R"(
+  static constexpr std::string_view s_vs_copy = R"(
+    #version 330
+
+    layout(location = 0) in vec2 aUv;
+
+    smooth out vec2 fUv;
+
+    void main() {
+      gl_Position = vec4(aUv * 2.0 - 1.0, 0.0, 1.0);
+      fUv = aUv;
+    }
+  )";
+
+  static constexpr std::string_view s_fs_copy = R"(
+    #version 330
+
+    uniform sampler2D uTexture;
+
+    smooth in vec2 fUv;
+
+    out vec4 oColor;
+
+    void main() {
+      oColor = texture(uTexture, fUv);
+    }  
+  )";
+
+  static constexpr std::string_view s_vs_main = R"(
     #version 330
 
     uniform float uScreenWidth;
@@ -62,7 +91,7 @@ namespace mr
     }
   )";
 
-  static constexpr std::string_view s_fragment_source = R"(
+  static constexpr std::string_view s_fs_main = R"(
     #version 330
 
     uniform sampler2D uFont;
@@ -92,12 +121,24 @@ namespace mr
   };
 
   static GLFWwindow *s_window = nullptr;
-  static GLuint s_program = 0;
+  static GLuint s_prg_main = 0;
+  static GLuint s_prg_copy = 0;
+
   static GLuint s_va = 0; // Vertex Array
   static GLuint s_vb = 0; // Vertex Buffer
+
+  static GLuint s_fb_render_target = 0;
+
+  static GLuint s_tx_bg = 0; // Backgound texture
+  static GLuint s_tx_fg = 0; // Foregroud texture;
+
+  static GLuint s_va_quad = 0;
+  static GLuint s_vb_quad = 0;
+
   static std::vector<grid_cell> s_grid;
   static std::array<falling_string, s_falling_strings_count> s_falling_strings;
-  static font s_font;
+  static std::unique_ptr<font> s_font;
+  static std::unique_ptr<blur_filter> s_blur_filter;
 
   // Randomly initialize a falling string. I just use the stantard rand(), it's enough for this project
   static void init_falling_string(falling_string &s)
@@ -120,73 +161,104 @@ namespace mr
 
   static const glyph &get_random_glyph(int32_t x, int32_t y, float depth)
   {
-    const auto &glyphs = s_font.get_glyphs();
+    const auto &glyphs = s_font->get_glyphs();
     const auto idx = static_cast<std::size_t>(float(x * s_col_count + y) * (1.0f + depth)) % glyphs.size();
     return glyphs[idx];
+  }
+
+  static void update_falling_string(falling_string &s, const float dt, const float view_width, const float view_height)
+  {
+    const float cell_size = view_width / s_col_count * s.depth;
+    const int32_t max_y = std::round(s.y);
+    const int32_t min_y = max_y - s.length + 1;
+
+    for (int32_t y = min_y; y <= max_y; ++y)
+    {
+      const float t = float(y - min_y) / (max_y - min_y);
+
+      grid_cell cell;
+      cell.set_color({s_color_palette.get(t), t * s.depth});
+      cell.set_glyph(get_random_glyph(s.x, y, s.depth));
+      cell.set_position(vec2f{float(s.x), float(y)} * cell_size, cell_size);
+
+      s_grid.push_back(cell);
+    }
+
+    // Move this string down
+    s.y += dt * s.speed;
+
+    // If the string is out of screen, reset it
+    if (min_y * cell_size >= view_height)
+      init_falling_string(s);
   }
 
   static void render(const float dt)
   {
     const auto [w, h] = get_window_size();
 
-    constexpr float screen_width = s_col_count;
-    const float screen_height = h / w * screen_width;
+    constexpr float view_width = s_col_count;
+    const float view_height = h / w * view_width;
 
     // Clear our cells
     s_grid.clear();
 
-    // Compute colors based on falling strings
+    // Update all the falling strings
     for (auto &s : s_falling_strings)
-    {
-      const float cell_size = screen_width / s_col_count * s.depth;
-      const int32_t max_y = std::round(s.y);
-      const int32_t min_y = max_y - s.length + 1;
+      update_falling_string(s, dt, view_width, view_height);
 
-      for (int32_t y = min_y; y <= max_y; ++y)
-      {
-        const float t = float(y - min_y) / (max_y - min_y);
+    // Setup textures
+    glBindTexture(GL_TEXTURE_2D, s_tx_fg);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
-        grid_cell cell;
-        cell.set_color({ s_color_palette.get(t), t * s.depth});
-        cell.set_glyph(get_random_glyph(s.x, y, s.depth));
-        cell.set_position(vec2f{float(s.x), float(y)} * cell_size, cell_size);
-
-        s_grid.push_back(cell);
-      }
-
-      // Move this string down
-      s.y += dt * s.speed;
-
-      // If the string is out of screen, reset it
-      if (min_y * cell_size >= h)
-        init_falling_string(s);
-    }
+    // Render to render target
+    glBindFramebuffer(GL_FRAMEBUFFER, s_fb_render_target);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, s_tx_fg, 0);
 
     glViewport(0, 0, w, h);
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    glUseProgram(s_program);
+    glUseProgram(s_prg_main);
 
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, s_font.get_texture());
+    glBindTexture(GL_TEXTURE_2D, s_font->get_texture());
 
-    glUniform1f(glGetUniformLocation(s_program, "uScreenWidth"), screen_width);
-    glUniform1f(glGetUniformLocation(s_program, "uScreenHeight"), screen_height);
-    glUniform1i(glGetUniformLocation(s_program, "uFont"), 0);
+    glUniform1f(glGetUniformLocation(s_prg_main, "uScreenWidth"), view_width);
+    glUniform1f(glGetUniformLocation(s_prg_main, "uScreenHeight"), view_height);
+    glUniform1i(glGetUniformLocation(s_prg_main, "uFont"), 0);
 
     glBindVertexArray(s_va);
     glBindBuffer(GL_ARRAY_BUFFER, s_vb);
     glBufferData(GL_ARRAY_BUFFER, sizeof(grid_cell) * s_grid.size(), s_grid.data(), GL_DYNAMIC_DRAW);
 
     glDrawArrays(GL_TRIANGLES, 0, s_grid.size() * 6);
+
+    // Rener to screen
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, w, h);
+
+    glClearColor(0, 0, 0, 0);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    glUseProgram(s_prg_copy);
+    glUniform1i(glGetUniformLocation(s_prg_copy, "uTexture"), 0);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, s_tx_fg);
+
+    glBindVertexArray(s_va_quad);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
   }
 
   static void initialize()
   {
-    // Load main program
-    s_program = load_program(s_vertex_source, s_fragment_source);
+
+    // Init some OpenGL stuff
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // Init vertex array
     glGenVertexArrays(1, &s_va);
@@ -203,13 +275,33 @@ namespace mr
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(vertex), (const void *)8);
     glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(vertex), (const void *)16);
 
-    // Init some OpenGL stuff
-    glDisable(GL_DEPTH_TEST);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    // Load programs
+    s_prg_main = load_program(s_vs_main, s_fs_main);
+    s_prg_copy = load_program(s_vs_copy, s_fs_copy);
 
     // Load font
-    s_font.load("assets/font.ttf");
+    s_font = std::make_unique<font>();
+    s_font->load("assets/font.ttf");
+
+    // Blur filter
+    s_blur_filter = std::make_unique<blur_filter>();
+
+    // Full screen quad
+    std::tie(s_va_quad, s_vb_quad) = create_full_screen_quad();
+
+    // Render target
+    glGenFramebuffers(1, &s_fb_render_target);
+
+    // Textures
+    glGenTextures(1, &s_tx_bg);
+    glBindTexture(GL_TEXTURE_2D, s_tx_bg);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glGenTextures(1, &s_tx_fg);
+    glBindTexture(GL_TEXTURE_2D, s_tx_fg);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     // Initilize falling strings
     for (auto &s : s_falling_strings)
@@ -222,6 +314,9 @@ namespace mr
 
   static void terminate(const int32_t exit_code)
   {
+    s_font = nullptr;
+    s_blur_filter = nullptr;
+
     glfwTerminate();
     exit(exit_code);
   }

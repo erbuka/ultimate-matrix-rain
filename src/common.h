@@ -108,6 +108,7 @@ namespace mr
     }
   };
 
+  std::tuple<GLuint, GLuint> create_full_screen_quad();
   GLuint load_program(const std::string_view vs_source, const std::string_view fs_source);
 
 }
