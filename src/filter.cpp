@@ -71,8 +71,7 @@ namespace mr
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    m_phblur = load_program(s_vs_fullscreen, s_fs_blur);
-    m_pvblur = load_program(s_vs_fullscreen, s_fs_blur);
+    m_prg_blur = load_program(s_vs_fullscreen, s_fs_blur);
 
     std::tie(m_quad_va, m_quad_vb) = create_full_screen_quad();
   }
@@ -83,39 +82,41 @@ namespace mr
     glDeleteTextures(1, &m_ping_pong);
     glDeleteVertexArrays(1, &m_quad_va);
     glDeleteBuffers(1, &m_quad_vb);
-    glDeleteProgram(m_phblur);
-    glDeleteProgram(m_pvblur);
+    glDeleteProgram(m_prg_blur);
   }
 
-  void blur_filter::apply(const GLuint target, const int32_t width, const int32_t height)
+  void blur_filter::apply(const GLuint target, const int32_t width, const int32_t height, const std::size_t iterations)
   {
 
     std::array passes = {
-        std::make_tuple(m_ping_pong, target, m_phblur),
-        std::make_tuple(target, m_ping_pong, m_pvblur)};
+        std::make_tuple(m_ping_pong, target),
+        std::make_tuple(target, m_ping_pong)};
 
     enable_scope scope{GL_BLEND};
     glDisable(GL_BLEND);
 
-    for (const auto [dst, src, program] : passes)
+    for(auto it = 0; it < iterations; ++it)
     {
-      glBindTexture(GL_TEXTURE_2D, dst);
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+      for (const auto [dst, src] : passes)
+      {
+        glBindTexture(GL_TEXTURE_2D, dst);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
-      glBindFramebuffer(GL_FRAMEBUFFER, m_framebuffer);
-      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dst, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, m_framebuffer);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dst, 0);
 
-      glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-      glClear(GL_COLOR_BUFFER_BIT);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
 
-      glUseProgram(program);
-      glUniform1i(glGetUniformLocation(program, "uTexture"), 0);
+        glUseProgram(m_prg_blur);
+        glUniform1i(glGetUniformLocation(m_prg_blur, "uTexture"), 0);
 
-      glActiveTexture(GL_TEXTURE0);
-      glBindTexture(GL_TEXTURE_2D, src);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, src);
 
-      glBindVertexArray(m_quad_va);
-      glDrawArrays(GL_TRIANGLES, 0, 6);
+        glBindVertexArray(m_quad_va);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+      }
     }
   }
 

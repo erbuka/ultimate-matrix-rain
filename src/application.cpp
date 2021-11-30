@@ -40,9 +40,11 @@ namespace mr
   static constexpr std::int32_t s_falling_string_min_speed = 10;
   static constexpr std::int32_t s_falling_string_max_speed = 30;
 
-  static constexpr std::array<float, 3> s_depth_layers = {
-      0.33,
-      0.66,
+  static constexpr std::array<float, 5> s_depth_layers = {
+      0.15,
+      0.30,
+      0.50,
+      0.75,
       1.00,
   };
 
@@ -276,8 +278,7 @@ namespace mr
       // Rendering falling strings
       render_layer(current_grid, view_width, view_height);
 
-      s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale);
-      s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale);
+      s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale, 1);
 
       std::swap(tx_dst, tx_src);
     }
