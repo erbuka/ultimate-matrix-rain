@@ -8,7 +8,7 @@
 namespace mr
 {
 
-  static constexpr std::string_view s_vs_blur = R"(
+  static constexpr std::string_view s_vs_fullscreen = R"(
     #version 330
 
     layout(location = 0) in vec2 aUv;
@@ -51,6 +51,18 @@ namespace mr
     }  
   )";
 
+  static constexpr std::string_view s_fs_copy = R"(
+    #version 330
+
+    uniform sampler2D uTexture;
+
+    out vec4 oColor;
+
+    void main() {
+      oColor = texture(uTexture, fUv);
+    }  
+  )";
+
   blur_filter::blur_filter()
   {
     glGenFramebuffers(1, &m_framebuffer);
@@ -59,8 +71,8 @@ namespace mr
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    m_phblur = load_program(s_vs_blur, s_fs_blur);
-    m_pvblur = load_program(s_vs_blur, s_fs_blur);
+    m_phblur = load_program(s_vs_fullscreen, s_fs_blur);
+    m_pvblur = load_program(s_vs_fullscreen, s_fs_blur);
 
     std::tie(m_quad_va, m_quad_vb) = create_full_screen_quad();
   }

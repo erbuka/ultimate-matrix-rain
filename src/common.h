@@ -30,8 +30,10 @@ namespace mr
       std::ranges::copy(l, components.begin());
     }
 
+    // Construction from a lower order vector + scalar (GLSL like)
     constexpr vec(const vec<N - 1, T> &v, T x)
     {
+      // TODO: maybe static_assert N > 1 ?
       std::ranges::copy(v.components, components.begin());
       components.back() = x;
     }
@@ -77,20 +79,28 @@ namespace mr
     vec4f color;
   };
 
+  // A cell grid is basically a quad(2 triangles, 6 vertices) with some helper functions
   struct grid_cell
   {
     std::array<vertex, 6> vertices;
     vertex &operator[](const size_t i) { return vertices[i]; }
     const vertex &operator[](const size_t i) const { return vertices[i]; }
 
+    // Range functions for "for" loops
     auto begin() { return vertices.begin(); }
     auto end() { return vertices.end(); }
 
+    // Sets the color for all vertices
     void set_color(const vec4f &c);
+
+    // It sets the texture coordinates based on the given glyph
     void set_glyph(const glyph &g);
-    void set_position(const vec2f pixel_pos, const float pixel_size);
+    
+    void set_position(const vec2f pos, const float size);
   };
 
+  // A helper class to interpolate between multiple colors given a value in [0, 1]
+  // Basically, a equally spaced multicolor grandient
   template <std::size_t N>
   struct color_palette
   {
@@ -112,6 +122,8 @@ namespace mr
   std::tuple<GLuint, GLuint> create_full_screen_quad();
   GLuint load_program(const std::string_view vs_source, const std::string_view fs_source);
 
+  // Helper class for staking OpenGL enable bits. Standard OpenGL does not support operations like glPush**, so
+  // this is kind of useful when there are a lot of render passes
   class enable_scope
   {
   private:

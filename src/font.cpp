@@ -26,8 +26,6 @@ namespace mr
     }
 
     std::vector<unsigned char> font_data;
-    std::vector<unsigned char> pixels;
-    pixels.resize(s_bitmap_width * s_bitmap_height);
 
     std::copy(
         std::istreambuf_iterator<char>(is),
@@ -35,6 +33,9 @@ namespace mr
         std::back_inserter(font_data));
 
     is.close();
+
+    std::vector<unsigned char> pixels;
+    pixels.resize(s_bitmap_width * s_bitmap_height);
 
     stbtt_pack_context pack_context;
 
@@ -52,6 +53,7 @@ namespace mr
 
     stbtt_PackEnd(&pack_context);
 
+    // The font is packed into a 8-bit bitmap (basically grayscale). I'll store it as RED 8
     glGenTextures(1, &m_texture);
     glBindTexture(GL_TEXTURE_2D, m_texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, s_bitmap_width, s_bitmap_height, 0, GL_RED, GL_UNSIGNED_BYTE, pixels.data());
@@ -64,6 +66,8 @@ namespace mr
       {
         const auto &ginfo = range.chardata_for_range[i];
 
+        // Sadly it is a classic bitmap, so point (0, 0) is a the top left corner, and each glyph coordinates are given
+        // in pixel space. So I need to invert the y-axis to get OpenGL uv coordinates
         m_glyphs.push_back({
             .uv0 = {
                 float(ginfo.x0) / s_bitmap_width,
@@ -76,7 +80,7 @@ namespace mr
         });
       }
 
-      // Delet font ranges
+      // Delete font ranges
       delete[] range.chardata_for_range;
 
     }
@@ -85,11 +89,8 @@ namespace mr
 
   font::~font()
   {
-    //TODO: fixme
-    /*
     if (m_texture)
       glDeleteTextures(1, &m_texture);
-    */
   }
 
 }
