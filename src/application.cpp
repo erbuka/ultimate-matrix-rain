@@ -27,18 +27,35 @@ namespace mr
     std::int32_t x = 0.0f;
     float y = 0.0f;
     float speed = 0.0f;
-    float depth = 1.0f;
+    size_t layer_index = 0;
     std::int32_t length = 0;
   };
 
   static constexpr std::int32_t s_col_count = 100;
-  static constexpr float s_falling_strings_min_depth = 0.25f;
-  static constexpr float s_falling_strings_max_depth = 1.0f;
   static constexpr std::int32_t s_falling_strings_count = 1000;
   static constexpr std::int32_t s_falling_string_min_length = 5;
   static constexpr std::int32_t s_falling_string_max_length = 50;
   static constexpr std::int32_t s_falling_string_min_speed = 10;
   static constexpr std::int32_t s_falling_string_max_speed = 30;
+
+  static constexpr std::array<float, 3> s_depth_layers = {
+      0.33,
+      0.66,
+      1.00,
+  };
+
+  static constexpr color_palette<10> s_color_palette = {
+      vec3f{0.0f, 1.0f, 0.0f},
+      vec3f{0.0f, 1.0f, 0.0f},
+      vec3f{0.0f, 1.0f, 0.0f},
+      vec3f{0.0f, 1.0f, 0.0f},
+      vec3f{0.0f, 1.0f, 0.0f},
+      vec3f{0.0f, 1.0f, 0.0f},
+      vec3f{0.0f, 1.0f, 0.0f},
+      vec3f{0.0f, 1.0f, 0.0f},
+      vec3f{1.0f, 1.0f, 1.0f},
+      vec3f{1.0f, 1.0f, 1.0f},
+  };
 
   static constexpr std::string_view s_vs_copy = R"(
     #version 330
@@ -107,19 +124,6 @@ namespace mr
     }
   )";
 
-  static constexpr color_palette<10> s_color_palette = {
-      vec3f{0.0f, 1.0f, 0.0f},
-      vec3f{0.0f, 1.0f, 0.0f},
-      vec3f{0.0f, 1.0f, 0.0f},
-      vec3f{0.0f, 1.0f, 0.0f},
-      vec3f{0.0f, 1.0f, 0.0f},
-      vec3f{0.0f, 1.0f, 0.0f},
-      vec3f{0.0f, 1.0f, 0.0f},
-      vec3f{0.0f, 1.0f, 0.0f},
-      vec3f{1.0f, 1.0f, 1.0f},
-      vec3f{1.0f, 1.0f, 1.0f},
-  };
-
   static GLFWwindow *s_window = nullptr;
   static GLuint s_prg_main = 0;
   static GLuint s_prg_copy = 0;
@@ -135,7 +139,7 @@ namespace mr
   static GLuint s_va_quad = 0;
   static GLuint s_vb_quad = 0;
 
-  static std::vector<grid_cell> s_grid;
+  static std::array<std::vector<grid_cell>, s_depth_layers.size()> s_grids;
   static std::array<falling_string, s_falling_strings_count> s_falling_strings;
   static std::unique_ptr<font> s_font;
   static std::unique_ptr<blur_filter> s_blur_filter;
@@ -143,10 +147,16 @@ namespace mr
   // Randomly initialize a falling string. I just use the stantard rand(), it's enough for this project
   static void init_falling_string(falling_string &s)
   {
-    s.depth = std::pow(s_falling_strings_min_depth + rand() / float(RAND_MAX) * (s_falling_strings_max_depth - s_falling_strings_min_depth), 3);
+    static constexpr auto get_random_layer = +[]() -> std::size_t
+    {
+      float t = rand() / float(RAND_MAX);
+      return static_cast<std::size_t>(t * t * t * s_depth_layers.size());
+    };
+
+    s.layer_index = get_random_layer();
     s.speed = s_falling_string_min_speed + rand() % (s_falling_string_max_speed - s_falling_string_min_speed);
     s.length = s_falling_string_min_length + rand() % (s_falling_string_max_length - s_falling_string_min_length);
-    s.x = (rand() % s_col_count) / s.depth;
+    s.x = (rand() % s_col_count) / s_depth_layers[s.layer_index];
 
     // The initial y position is actually randomized to be off screen. This gives more variance at the start of the program
     s.y = -(s.length + rand() % s_falling_string_max_length);
@@ -161,14 +171,16 @@ namespace mr
 
   static const glyph &get_random_glyph(int32_t x, int32_t y, float depth)
   {
+    constexpr size_t s0 = 2836, s1 = 23873;
     const auto &glyphs = s_font->get_glyphs();
-    const auto idx = static_cast<std::size_t>(float(x * s_col_count + y) * (1.0f + depth)) % glyphs.size();
+    const auto idx = static_cast<std::size_t>(x * s0 + y * s1) % glyphs.size();
     return glyphs[idx];
   }
 
   static void update_falling_string(falling_string &s, const float dt, const float view_width, const float view_height)
   {
-    const float cell_size = view_width / s_col_count * s.depth;
+    const float depth = s_depth_layers[s.layer_index];
+    const float cell_size = view_width / s_col_count * depth;
     const int32_t max_y = std::round(s.y);
     const int32_t min_y = max_y - s.length + 1;
 
@@ -177,11 +189,11 @@ namespace mr
       const float t = float(y - min_y) / (max_y - min_y);
 
       grid_cell cell;
-      cell.set_color({s_color_palette.get(t), t * s.depth});
-      cell.set_glyph(get_random_glyph(s.x, y, s.depth));
+      cell.set_color({s_color_palette.get(t), t * depth});
+      cell.set_glyph(get_random_glyph(s.x, y, depth));
       cell.set_position(vec2f{float(s.x), float(y)} * cell_size, cell_size);
 
-      s_grid.push_back(cell);
+      s_grids[s.layer_index].push_back(cell);
     }
 
     // Move this string down
@@ -192,33 +204,9 @@ namespace mr
       init_falling_string(s);
   }
 
-  static void render(const float dt)
+  static void render_layer(const std::vector<grid_cell> &cells, const float view_width, const float view_height)
   {
-    const auto [w, h] = get_window_size();
-
-    constexpr float view_width = s_col_count;
-    const float view_height = h / w * view_width;
-
-    // Clear our cells
-    s_grid.clear();
-
-    // Update all the falling strings
-    for (auto &s : s_falling_strings)
-      update_falling_string(s, dt, view_width, view_height);
-
-    // Setup textures
-    glBindTexture(GL_TEXTURE_2D, s_tx_fg);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-
-    // Render to render target
-    glBindFramebuffer(GL_FRAMEBUFFER, s_fb_render_target);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, s_tx_fg, 0);
-
-    glViewport(0, 0, w, h);
-
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-
+    // Rendering falling strings
     glUseProgram(s_prg_main);
 
     glActiveTexture(GL_TEXTURE0);
@@ -230,26 +218,102 @@ namespace mr
 
     glBindVertexArray(s_va);
     glBindBuffer(GL_ARRAY_BUFFER, s_vb);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(grid_cell) * s_grid.size(), s_grid.data(), GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(grid_cell) * cells.size(), cells.data(), GL_DYNAMIC_DRAW);
 
-    glDrawArrays(GL_TRIANGLES, 0, s_grid.size() * 6);
+    glDrawArrays(GL_TRIANGLES, 0, cells.size() * 6);
+  }
+
+  static void render(const float dt)
+  {
+    const auto [w, h] = get_window_size();
+
+    constexpr float view_width = s_col_count;
+    const float view_height = h / w * view_width;
+
+    // Clear grids
+    for (auto &g : s_grids)
+      g.clear();
+
+    // Update all the falling strings
+    for (auto &s : s_falling_strings)
+      update_falling_string(s, dt, view_width, view_height);
+
+    auto tx_src = s_tx_bg;
+    auto tx_dst = s_tx_fg;
+
+    // Clear source from previous frame
+    glBindFramebuffer(GL_FRAMEBUFFER, s_fb_render_target);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tx_src, 0);
+
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    for (size_t i = 0; i < s_depth_layers.size() - 1; ++i)
+    {
+      const auto &current_grid = s_grids[i];
+
+      // Render to render target
+      glBindFramebuffer(GL_FRAMEBUFFER, s_fb_render_target);
+      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tx_dst, 0);
+
+      glViewport(0, 0, w, h);
+
+      glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+      glClear(GL_COLOR_BUFFER_BIT);
+
+      // Render previous pass (bg)
+      glUseProgram(s_prg_copy);
+      glUniform1i(glGetUniformLocation(s_prg_copy, "uTexture"), 0);
+
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, tx_src);
+
+      glBindVertexArray(s_va_quad);
+      glDrawArrays(GL_TRIANGLES, 0, 6);
+
+      // Rendering falling strings
+      render_layer(current_grid, view_width, view_height);
+
+      s_blur_filter->apply(tx_dst, w, h);
+      s_blur_filter->apply(tx_dst, w, h);
+      s_blur_filter->apply(tx_dst, w, h);
+      s_blur_filter->apply(tx_dst, w, h);
+
+      std::swap(tx_dst, tx_src);
+    }
 
     // Rener to screen
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, w, h);
 
-    glClearColor(0, 0, 0, 0);
+    glClearColor(0, 0, 0, 1);
     glClear(GL_COLOR_BUFFER_BIT);
 
     glUseProgram(s_prg_copy);
     glUniform1i(glGetUniformLocation(s_prg_copy, "uTexture"), 0);
 
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, s_tx_fg);
+    glBindTexture(GL_TEXTURE_2D, tx_src);
 
     glBindVertexArray(s_va_quad);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
+    render_layer(s_grids.back(), view_width, view_height);
+  }
+
+  static void resize()
+  {
+    const auto [w, h] = get_window_size();
+
+    // Setup textures
+    std::vector<std::uint8_t> data(w * h * 4);
+    std::ranges::fill(data, 0);
+
+    for (const auto tx : {s_tx_bg, s_tx_fg})
+    {
+      glBindTexture(GL_TEXTURE_2D, tx);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data.data());
+    }
   }
 
   static void initialize()
@@ -306,11 +370,12 @@ namespace mr
     // Initilize falling strings
     for (auto &s : s_falling_strings)
       init_falling_string(s);
+
+    // Initialize and resize stuff
+    resize();
   }
 
-  static void on_window_resize(GLFWwindow *window, int32_t w, int32_t h)
-  {
-  }
+  static void on_window_resize(GLFWwindow *window, int32_t w, int32_t h) { resize(); }
 
   static void terminate(const int32_t exit_code)
   {

@@ -7,6 +7,7 @@
 #include <string_view>
 #include <concepts>
 #include <array>
+#include <unordered_map>
 
 #include <glad/glad.h>
 
@@ -110,5 +111,14 @@ namespace mr
 
   std::tuple<GLuint, GLuint> create_full_screen_quad();
   GLuint load_program(const std::string_view vs_source, const std::string_view fs_source);
+
+  class enable_scope
+  {
+  private:
+    std::unordered_map<GLenum, bool> m_bits;
+  public:
+    enable_scope(const std::initializer_list<GLenum> &bits);
+    ~enable_scope();
+  };
 
 }

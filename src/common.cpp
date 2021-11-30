@@ -128,4 +128,17 @@ namespace mr
     vertices[5].position = {fx + pixel_size, fy};
   }
 
+
+  enable_scope::enable_scope(const std::initializer_list<GLenum>& bits)
+  {
+    for(const auto bit: bits)
+      m_bits[bit] = glIsEnabled(bit) == GL_TRUE;      
+  }
+
+  enable_scope::~enable_scope()
+  {
+    for(const auto [bit, enabled]: m_bits)
+      enabled ? glEnable(bit) : glDisable(bit);
+  }
+
 }

@@ -30,12 +30,26 @@ namespace mr
 
     out vec4 oColor;
 
+    const float KERNEL[9] = float[] (
+      0.0625,0.125,0.0625,
+      0.125,0.25,0.125,
+      0.0625,0.125,0.0625
+    );
+
     void main() {
-      oColor = texture(uTexture, fUv);
+      vec2 step = 1.0 / vec2(textureSize(uTexture, 0));
+      vec4 color = vec4(0.0);
+
+      for(int i = 0; i < 3; ++i) {
+        for(int j = 0; j < 3; ++j) {
+          color += texture(uTexture, fUv + vec2(i - 1, j - 1) * step) * KERNEL[i * 3 + j]; 
+        }
+      } 
+
+      oColor = color;
+
     }  
   )";
-
-
 
   blur_filter::blur_filter()
   {
@@ -68,6 +82,8 @@ namespace mr
         std::make_tuple(m_ping_pong, target, m_phblur),
         std::make_tuple(target, m_ping_pong, m_pvblur)};
 
+    enable_scope scope{GL_BLEND};
+    glDisable(GL_BLEND);
 
     for (const auto [dst, src, program] : passes)
     {
@@ -77,7 +93,7 @@ namespace mr
       glBindFramebuffer(GL_FRAMEBUFFER, m_framebuffer);
       glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dst, 0);
 
-      glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+      glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT);
 
       glUseProgram(program);
