@@ -31,6 +31,8 @@ namespace mr
     std::int32_t length = 0;
   };
 
+  static constexpr std::int32_t s_blur_scale = 2;
+
   static constexpr std::int32_t s_col_count = 100;
   static constexpr std::int32_t s_falling_strings_count = 1000;
   static constexpr std::int32_t s_falling_string_min_length = 5;
@@ -256,7 +258,7 @@ namespace mr
       glBindFramebuffer(GL_FRAMEBUFFER, s_fb_render_target);
       glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tx_dst, 0);
 
-      glViewport(0, 0, w, h);
+      glViewport(0, 0, w / s_blur_scale, h / s_blur_scale);
 
       glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT);
@@ -274,10 +276,8 @@ namespace mr
       // Rendering falling strings
       render_layer(current_grid, view_width, view_height);
 
-      s_blur_filter->apply(tx_dst, w, h);
-      s_blur_filter->apply(tx_dst, w, h);
-      s_blur_filter->apply(tx_dst, w, h);
-      s_blur_filter->apply(tx_dst, w, h);
+      s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale);
+      s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale);
 
       std::swap(tx_dst, tx_src);
     }
@@ -312,7 +312,7 @@ namespace mr
     for (const auto tx : {s_tx_bg, s_tx_fg})
     {
       glBindTexture(GL_TEXTURE_2D, tx);
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data.data());
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w / s_blur_scale, h / s_blur_scale, 0, GL_RGBA, GL_UNSIGNED_BYTE, data.data());
     }
   }
 
