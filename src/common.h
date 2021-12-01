@@ -104,7 +104,7 @@ namespace mr
   template <std::size_t N>
   struct color_palette
   {
-    const std::array<vec3f, N> colors;
+    std::array<vec3f, N> colors;
 
     const vec3f get(const float t) const
     {

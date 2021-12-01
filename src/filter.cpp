@@ -24,6 +24,7 @@ namespace mr
   static constexpr std::string_view s_fs_blur = R"(
     #version 330
 
+    uniform float uColorScale;
     uniform sampler2D uTexture;
 
     smooth in vec2 fUv;
@@ -46,12 +47,12 @@ namespace mr
         }
       } 
 
-      oColor = color;
+      oColor = color * uColorScale;
 
     }  
   )";
 
-  static constexpr std::string_view s_fs_copy = R"(
+  static constexpr std::string_view s_fs_pass_trough = R"(
     #version 330
 
     uniform sampler2D uTexture;
@@ -85,7 +86,7 @@ namespace mr
     glDeleteProgram(m_prg_blur);
   }
 
-  void blur_filter::apply(const GLuint target, const int32_t width, const int32_t height, const std::size_t iterations)
+  void blur_filter::apply(const GLuint target, const int32_t width, const int32_t height, const std::size_t iterations, const float color_scale)
   {
 
     std::array passes = {
@@ -100,7 +101,7 @@ namespace mr
       for (const auto [dst, src] : passes)
       {
         glBindTexture(GL_TEXTURE_2D, dst);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
         glBindFramebuffer(GL_FRAMEBUFFER, m_framebuffer);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dst, 0);
@@ -110,6 +111,7 @@ namespace mr
 
         glUseProgram(m_prg_blur);
         glUniform1i(glGetUniformLocation(m_prg_blur, "uTexture"), 0);
+        glUniform1f(glGetUniformLocation(m_prg_blur, "uColorScale"), color_scale);
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, src);

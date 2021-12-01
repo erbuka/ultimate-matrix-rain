@@ -5,6 +5,7 @@ workspace "MatrixRain"
     location(_ACTION)
 
     filter "configurations:Debug"
+        defines { "DEBUG" }
         symbols "On"
         optimize "Off"
 
@@ -27,6 +28,30 @@ project "Glad"
 
     includedirs { "vendor/glad/include" }
     files { "vendor/glad/src/**.c" }
+
+project "ImGui"
+    location(_ACTION)
+    kind "StaticLib"
+    language "C++"
+
+    objdir "bin-int/%{cfg.buildcfg}/%{prj.name}"
+    targetdir "bin/%{cfg.buildcfg}/%{prj.name}"
+    debugdir "bin/%{cfg.buildcfg}/%{prj.name}"
+
+    includedirs { 
+      "vendor/imgui",
+      "vendor/glfw/include"
+    }
+
+    files {
+      "vendor/imgui/imgui.cpp",
+      "vendor/imgui/imgui_demo.cpp",
+      "vendor/imgui/imgui_draw.cpp",
+      "vendor/imgui/imgui_tables.cpp",
+      "vendor/imgui/imgui_widgets.cpp",
+      "vendor/imgui/backends/imgui_impl_opengl3.cpp",
+      "vendor/imgui/backends/imgui_impl_glfw.cpp",
+    }
 
 project "GLFW"
     location(_ACTION)
@@ -99,6 +124,7 @@ project "MatrixRain"
         "src",
         "vendor/glad/include",
         "vendor/glfw/include",
+        "vendor/imgui",
         "vendor/stb"
     }
 
@@ -110,6 +136,9 @@ project "MatrixRain"
     postbuildcommands {
         "{COPY} ../src/assets ../bin/%{cfg.buildcfg}/%{prj.name}/assets"
     }
+
+    filter "configurations:Debug"
+      links { "ImGui" }
 
     filter "system:windows"
         links { "opengl32" }
