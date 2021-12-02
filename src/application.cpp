@@ -61,8 +61,9 @@ namespace mr
   })();
 
   // TODO: revert to constexpr after
-  static color_palette<1> s_color_palette = {
+  static color_palette<2> s_color_palette = {
       vec3f{0.094f, 1.0f, 0.153f},
+      vec3f{1.0f, 2.0f, 1.0f},
   };
 
   static constexpr std::string_view s_vs_full_screen = R"(
@@ -96,6 +97,7 @@ namespace mr
     #version 330
 
     uniform sampler2D uTexture;
+    uniform sampler2D uBloom;
     uniform float uExposure;
 
     smooth in vec2 fUv;
@@ -103,7 +105,7 @@ namespace mr
     out vec4 oColor;
 
     void main() {
-      vec3 hdrColor = texture(uTexture, fUv).rgb; 
+      vec3 hdrColor = texture(uTexture, fUv).rgb  + texture(uBloom, fUv).rgb; 
       vec3 color = vec3(1.0) - exp(-hdrColor * uExposure);
       oColor = vec4(color, 1.0);
     }  
@@ -172,12 +174,15 @@ namespace mr
 
   // Shader params
   static float s_exposure = 1.0f;
+  static float s_bloom_threshold = 1.0f;
+  static float s_bloom_knee = 0.01f;
 
   // Data
   static std::array<std::vector<grid_cell>, s_depth_layers.size()> s_grids;
   static std::array<falling_string, s_falling_strings_count> s_falling_strings;
   static std::unique_ptr<font> s_font;
   static std::unique_ptr<blur_filter> s_blur_filter;
+  static std::unique_ptr<bloom> s_fx_bloom;
 
   // Randomly initialize a falling string. I just use the stantard rand(), it's enough for this project
   static void init_falling_string(falling_string &s)
@@ -340,25 +345,32 @@ namespace mr
       render_layer(s_grids.back(), view_width, view_height);
     }
 
+    const auto tx_bloom = s_fx_bloom->compute(s_tx_final_render, s_bloom_threshold, s_bloom_knee);
+
     // Draw to screen
     {
       enable_scope scope({GL_BLEND, GL_FRAMEBUFFER_SRGB});
+      
+      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
       glDisable(GL_BLEND);
       glEnable(GL_FRAMEBUFFER_SRGB);
-
-      glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
       glViewport(0, 0, w, h);
 
       glClearColor(0, 0, 0, 1);
       glClear(GL_COLOR_BUFFER_BIT);
 
-      glUseProgram(s_prg_hdr);
-      glUniform1i(glGetUniformLocation(s_prg_hdr, "uTexture"), 0);
-      glUniform1f(glGetUniformLocation(s_prg_hdr, "uExposure"), s_exposure);
-
       glActiveTexture(GL_TEXTURE0);
       glBindTexture(GL_TEXTURE_2D, s_tx_final_render);
+
+      glActiveTexture(GL_TEXTURE1);
+      glBindTexture(GL_TEXTURE_2D, tx_bloom);
+
+      glUseProgram(s_prg_hdr);
+      glUniform1i(glGetUniformLocation(s_prg_hdr, "uTexture"), 0);
+      glUniform1i(glGetUniformLocation(s_prg_hdr, "uBloom"), 1);
+      glUniform1f(glGetUniformLocation(s_prg_hdr, "uExposure"), s_exposure);
 
       glBindVertexArray(s_va_quad);
       glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -372,6 +384,8 @@ namespace mr
 
     ImGui::Begin("Debug");
     ImGui::DragFloat("Exposure", &s_exposure, 0.01f, 0.1f, 10.0f);
+    ImGui::DragFloat("Bloom Threshold", &s_bloom_threshold, 0.01f, 0.1f, 5.0f);
+    ImGui::DragFloat("Bloom Knee", &s_bloom_knee, 0.0f, 0.0f, 0.5f);
 
     for (std::size_t i = 0; i < s_color_palette.colors.size(); ++i)
     {
@@ -393,7 +407,7 @@ namespace mr
     const auto [w, h] = get_window_size();
 
     glBindTexture(GL_TEXTURE_2D, s_tx_final_render);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
 
     // TODO: replace this shit with framebuffer + clear
     std::vector<std::uint8_t> data(w * h * 4);
@@ -402,8 +416,10 @@ namespace mr
     for (const auto tx : {s_tx_blur0, s_tx_blur1})
     {
       glBindTexture(GL_TEXTURE_2D, tx);
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w / s_blur_scale, h / s_blur_scale, 0, GL_RGBA, GL_UNSIGNED_BYTE, data.data());
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w / s_blur_scale, h / s_blur_scale, 0, GL_RGBA, GL_HALF_FLOAT, data.data());
     }
+
+    s_fx_bloom->resize(w, h);
   }
 
   static void initialize()
@@ -440,6 +456,9 @@ namespace mr
 
     // Blur filter
     s_blur_filter = std::make_unique<blur_filter>();
+
+    // Bloom
+    s_fx_bloom = std::make_unique<bloom>();
 
     // Full screen quad
     std::tie(s_va_quad, s_vb_quad) = create_full_screen_quad();
@@ -484,14 +503,17 @@ namespace mr
 
   static void terminate(const int32_t exit_code)
   {
+    // Force destructors before glfwTerminate (otherwise it causes segmentaion fault)
     s_font = nullptr;
     s_blur_filter = nullptr;
+    s_fx_bloom = nullptr;
 
+    // Destroy OpenGL context and all the resources associated with it
     glfwTerminate();
     exit(exit_code);
   }
 
-  void terminate_with_error(std::string_view descr)
+  void terminate_with_error(const std::string_view descr)
   {
     std::cerr << descr << '\n';
     terminate(-1);

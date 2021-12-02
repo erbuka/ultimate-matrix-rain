@@ -7,5 +7,5 @@
 namespace mr
 {
   void run(); 
-  void terminate_with_error(std::string_view descr);
+  void terminate_with_error(const std::string_view descr);
 }
