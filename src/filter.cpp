@@ -24,17 +24,14 @@ namespace mr
   static constexpr std::string_view s_fs_blur = R"(
     #version 330
 
-    uniform float uColorScale;
     uniform sampler2D uTexture;
 
     smooth in vec2 fUv;
 
     out vec4 oColor;
 
-    const float KERNEL[9] = float[] (
-      0.0625,0.125,0.0625,
-      0.125,0.25,0.125,
-      0.0625,0.125,0.0625
+    const float KERNEL[3] = float[] (
+      0.25, 0.5, 0.25
     );
 
     void main() {
@@ -42,12 +39,16 @@ namespace mr
       vec4 color = vec4(0.0);
 
       for(int i = 0; i < 3; ++i) {
-        for(int j = 0; j < 3; ++j) {
-          color += texture(uTexture, fUv + vec2(i - 1, j - 1) * step) * KERNEL[i * 3 + j]; 
-        }
-      } 
+        #if defined(HORIZONTAL)
+          color += texture(uTexture, fUv + vec2(i - 1, 0.0) * step) * KERNEL[i]; 
+        #elif defined(VERTICAL)
+          color += texture(uTexture, fUv + vec2(0.0, i - 1) * step) * KERNEL[i]; 
+        #else 
+          #error "You bad person"
+        #endif
+      }
 
-      oColor = color * uColorScale;
+      oColor = color;
 
     }  
   )";
@@ -72,7 +73,8 @@ namespace mr
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    m_prg_blur = load_program(s_vs_fullscreen, s_fs_blur);
+    m_prg_hblur = load_program(s_vs_fullscreen, s_fs_blur, { "HORIZONTAL" });
+    m_prg_vblur = load_program(s_vs_fullscreen, s_fs_blur, { "VERTICAL" });
 
     std::tie(m_quad_va, m_quad_vb) = create_full_screen_quad();
   }
@@ -83,22 +85,23 @@ namespace mr
     glDeleteTextures(1, &m_ping_pong);
     glDeleteVertexArrays(1, &m_quad_va);
     glDeleteBuffers(1, &m_quad_vb);
-    glDeleteProgram(m_prg_blur);
+    glDeleteProgram(m_prg_hblur);
+    glDeleteProgram(m_prg_vblur);
   }
 
-  void blur_filter::apply(const GLuint target, const int32_t width, const int32_t height, const std::size_t iterations, const float color_scale)
+  void blur_filter::apply(const GLuint target, const int32_t width, const int32_t height, const std::size_t iterations)
   {
 
     std::array passes = {
-        std::make_tuple(m_ping_pong, target),
-        std::make_tuple(target, m_ping_pong)};
+        std::make_tuple(m_ping_pong, target, m_prg_hblur),
+        std::make_tuple(target, m_ping_pong, m_prg_vblur)};
 
     enable_scope scope{GL_BLEND};
     glDisable(GL_BLEND);
 
     for(auto it = 0; it < iterations; ++it)
     {
-      for (const auto [dst, src] : passes)
+      for (const auto [dst, src, program] : passes)
       {
         glBindTexture(GL_TEXTURE_2D, dst);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
@@ -109,9 +112,8 @@ namespace mr
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glUseProgram(m_prg_blur);
-        glUniform1i(glGetUniformLocation(m_prg_blur, "uTexture"), 0);
-        glUniform1f(glGetUniformLocation(m_prg_blur, "uColorScale"), color_scale);
+        glUseProgram(program);
+        glUniform1i(glGetUniformLocation(program, "uTexture"), 0);
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, src);

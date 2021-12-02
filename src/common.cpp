@@ -1,6 +1,7 @@
 #include "common.h"
 
 #include <string>
+#include <sstream>
 
 #include <GLFW/glfw3.h>
 
@@ -9,6 +10,27 @@
 
 namespace mr
 {
+
+  static std::string inject_defines_into_source(const std::string_view source, const std::initializer_list<std::string_view> &defines)
+  {
+    std::string src(source.data());
+
+    if (defines.size() > 0)
+    {
+      auto pos = src.find("#version");
+      pos = pos == std::string::npos ? 0 : src.find('\n', pos) + 1;
+
+      // No std::format :(
+      for(const auto d: defines) {
+        std::stringstream ss;;
+        ss << "#define " << d.data() << '\n';
+        src.insert(pos, ss.str());
+      }
+
+    }
+
+    return src;
+  }
 
   static auto load_shader(const std::string_view source, const GLenum type)
   {
@@ -38,12 +60,12 @@ namespace mr
     return shader;
   }
 
-  GLuint load_program(const std::string_view vs_source, const std::string_view fs_source)
+  GLuint load_program(const std::string_view vs_source, const std::string_view fs_source, const std::initializer_list<std::string_view> &defines)
   {
     const auto program = glCreateProgram();
 
-    const auto vs = load_shader(vs_source, GL_VERTEX_SHADER);
-    const auto fs = load_shader(fs_source, GL_FRAGMENT_SHADER);
+    const auto vs = load_shader(inject_defines_into_source(vs_source, defines), GL_VERTEX_SHADER);
+    const auto fs = load_shader(inject_defines_into_source(fs_source, defines), GL_FRAGMENT_SHADER);
 
     glAttachShader(program, vs);
     glAttachShader(program, fs);
@@ -128,16 +150,15 @@ namespace mr
     vertices[5].position = {fx + pixel_size, fy};
   }
 
-
-  enable_scope::enable_scope(const std::initializer_list<GLenum>& bits)
+  enable_scope::enable_scope(const std::initializer_list<GLenum> &bits)
   {
-    for(const auto bit: bits)
-      m_bits[bit] = glIsEnabled(bit) == GL_TRUE;      
+    for (const auto bit : bits)
+      m_bits[bit] = glIsEnabled(bit) == GL_TRUE;
   }
 
   enable_scope::~enable_scope()
   {
-    for(const auto [bit, enabled]: m_bits)
+    for (const auto [bit, enabled] : m_bits)
       enabled ? glEnable(bit) : glDisable(bit);
   }
 

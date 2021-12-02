@@ -53,6 +53,13 @@ namespace mr
       1.00,
   };
 
+  static constexpr std::array<float, s_depth_layers.size()> s_depth_layers_fade = ([]{
+    std::array<float, s_depth_layers.size()> result;
+    for (size_t i = 0; i < result.size(); ++i)
+      result[i] = s_depth_layers[i] * s_depth_layers[i];
+    return result;
+  })();
+
   // TODO: revert to constexpr after
   static color_palette<1> s_color_palette = {
       vec3f{0.094f, 1.0f, 0.153f},
@@ -165,7 +172,6 @@ namespace mr
 
   // Shader params
   static float s_exposure = 1.0f;
-  static float s_blur_color_scale = 0.95f;
 
   // Data
   static std::array<std::vector<grid_cell>, s_depth_layers.size()> s_grids;
@@ -185,7 +191,7 @@ namespace mr
     s.layer_index = get_random_layer();
     s.speed = s_falling_string_min_speed + rand() % (s_falling_string_max_speed - s_falling_string_min_speed);
     s.length = s_falling_string_min_length + rand() % (s_falling_string_max_length - s_falling_string_min_length);
-    
+
     // Number of columns depends on the depth
     const int32_t col_count = s_col_count / s_depth_layers[s.layer_index];
     s.x = rand() % col_count;
@@ -221,7 +227,7 @@ namespace mr
       const float t = float(y - min_y) / (max_y - min_y);
 
       grid_cell cell;
-      cell.set_color({s_color_palette.get(t), t * depth});
+      cell.set_color({s_color_palette.get(t), t * s_depth_layers_fade[s.layer_index] });
       cell.set_glyph(get_random_glyph(s.x, y, depth));
       cell.set_position(vec2f{float(s.x), float(y)} * cell_size, cell_size);
 
@@ -306,7 +312,7 @@ namespace mr
       // Rendering falling strings
       render_layer(current_grid, view_width, view_height);
 
-      s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale, 1, s_blur_color_scale);
+      s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale, 1);
 
       std::swap(tx_dst, tx_src);
     }
@@ -366,9 +372,8 @@ namespace mr
 
     ImGui::Begin("Debug");
     ImGui::DragFloat("Exposure", &s_exposure, 0.01f, 0.1f, 10.0f);
-    ImGui::DragFloat("Blur Color Scale", &s_blur_color_scale, 0.01f, 0.1f, 1.0f);
 
-    for(std::size_t i = 0; i < s_color_palette.colors.size(); ++i)
+    for (std::size_t i = 0; i < s_color_palette.colors.size(); ++i)
     {
       char buffer[20];
       sprintf(buffer, "Palette #%ld", i);
@@ -376,7 +381,6 @@ namespace mr
     }
 
     ImGui::End();
-
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -469,11 +473,11 @@ namespace mr
 #ifdef DEBUG
     // Init Debug GUI
     ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    ImGuiIO &io = ImGui::GetIO();
+    (void)io;
     ImGui_ImplGlfw_InitForOpenGL(s_window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 #endif
-
   }
 
   static void on_window_resize(GLFWwindow *window, int32_t w, int32_t h) { resize(); }

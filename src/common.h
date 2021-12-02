@@ -120,7 +120,7 @@ namespace mr
   };
 
   std::tuple<GLuint, GLuint> create_full_screen_quad();
-  GLuint load_program(const std::string_view vs_source, const std::string_view fs_source);
+  GLuint load_program(const std::string_view vs_source, const std::string_view fs_source, const std::initializer_list<std::string_view>& defines = {});
 
   // Helper class for staking OpenGL enable bits. Standard OpenGL does not support operations like glPush**, so
   // this is kind of useful when there are a lot of render passes
