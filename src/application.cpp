@@ -185,7 +185,10 @@ namespace mr
     s.layer_index = get_random_layer();
     s.speed = s_falling_string_min_speed + rand() % (s_falling_string_max_speed - s_falling_string_min_speed);
     s.length = s_falling_string_min_length + rand() % (s_falling_string_max_length - s_falling_string_min_length);
-    s.x = (rand() % s_col_count) / s_depth_layers[s.layer_index];
+    
+    // Number of columns depends on the depth
+    const int32_t col_count = s_col_count / s_depth_layers[s.layer_index];
+    s.x = rand() % col_count;
 
     // The initial y position is actually randomized to be off screen. This gives more variance at the start of the program
     s.y = -(s.length + rand() % s_falling_string_max_length);
