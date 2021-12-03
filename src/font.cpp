@@ -53,6 +53,7 @@ namespace mr
 
     stbtt_PackEnd(&pack_context);
 
+    // TODO: maybe use mipmaps
     // The font is packed into a 8-bit bitmap (basically grayscale). I'll store it as RED 8
     glGenTextures(1, &m_texture);
     glBindTexture(GL_TEXTURE_2D, m_texture);

@@ -189,6 +189,7 @@ namespace mr
   {
     static constexpr auto get_random_layer = +[]() -> std::size_t
     {
+      // cubic on t so that front layers are less likely to come out
       float t = rand() / float(RAND_MAX);
       return static_cast<std::size_t>(t * t * t * s_depth_layers.size());
     };
@@ -212,7 +213,7 @@ namespace mr
     return std::tuple{float(x), float(y)};
   }
 
-  static const glyph &get_random_glyph(int32_t x, int32_t y, float depth)
+  static const glyph &get_random_glyph(int32_t x, int32_t y)
   {
     constexpr size_t s0 = 2836, s1 = 23873;
     const auto &glyphs = s_font->get_glyphs();
@@ -233,7 +234,7 @@ namespace mr
 
       grid_cell cell;
       cell.set_color({s_color_palette.get(t), t * s_depth_layers_fade[s.layer_index] });
-      cell.set_glyph(get_random_glyph(s.x, y, depth));
+      cell.set_glyph(get_random_glyph(s.x, y));
       cell.set_position(vec2f{float(s.x), float(y)} * cell_size, cell_size);
 
       s_grids[s.layer_index].push_back(cell);
@@ -291,6 +292,7 @@ namespace mr
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
+    // TODO: not sure about the blur anymore
     for (size_t i = 0; i < s_depth_layers.size() - 1; ++i)
     {
       const auto &current_grid = s_grids[i];
