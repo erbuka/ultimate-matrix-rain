@@ -23,8 +23,6 @@
 #include "common.h"
 #include "font.h"
 
-// TODO: hdr with additive coloring
-
 namespace mr
 {
 
@@ -37,7 +35,7 @@ namespace mr
     std::int32_t length = 0;
   };
 
-  static constexpr std::int32_t s_blur_scale = 2;
+  static constexpr std::int32_t s_blur_scale = 1;
 
   static constexpr std::int32_t s_col_count = 100;
   static constexpr std::int32_t s_falling_strings_count = 1500;
@@ -292,8 +290,6 @@ namespace mr
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    // TODO: not sure about the blur anymore
-    
     // Blur all the back layers
     for (size_t i = 0; i < s_depth_layers.size() - 1; ++i)
     {
@@ -321,7 +317,9 @@ namespace mr
       // Rendering falling strings
       render_layer(current_grid, view_width, view_height);
 
-      s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale, 1.0f - s_depth_layers[i], 1);
+      // TODO: defide to keep blur or not
+      //s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale, 1.0f - s_depth_layers[i], 1);
+      s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale, 0.0f, 1);
 
       std::swap(tx_dst, tx_src);
     }
@@ -408,19 +406,23 @@ namespace mr
 
   static void resize()
   {
+
     const auto [w, h] = get_window_size();
 
     glBindTexture(GL_TEXTURE_2D, s_tx_final_render);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
 
-    // TODO: replace this shit with framebuffer + clear
-    std::vector<std::uint8_t> data(w * h * 4);
-    std::ranges::fill(data, 0);
-
     for (const auto tx : {s_tx_blur0, s_tx_blur1})
     {
       glBindTexture(GL_TEXTURE_2D, tx);
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w / s_blur_scale, h / s_blur_scale, 0, GL_RGBA, GL_HALF_FLOAT, data.data());
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w / s_blur_scale, h / s_blur_scale, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
+
+      glBindFramebuffer(GL_FRAMEBUFFER, s_fb_render_target);
+      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tx, 0);
+
+      glClearColor(0,0,0,1);
+      glClear(GL_COLOR_BUFFER_BIT);
+
     }
 
     s_fx_bloom->resize(w, h);
@@ -475,16 +477,22 @@ namespace mr
     glBindTexture(GL_TEXTURE_2D, s_tx_blur0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     glGenTextures(1, &s_tx_blur1);
     glBindTexture(GL_TEXTURE_2D, s_tx_blur1);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     glGenTextures(1, &s_tx_final_render);
     glBindTexture(GL_TEXTURE_2D, s_tx_final_render);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     // Initilize falling strings
     for (auto &s : s_falling_strings)

@@ -18,7 +18,7 @@ namespace mr
 
   // Generic vector type, just testing some C++20 concepts
   template <std::size_t N, typename T>
-  requires std::floating_point<T> || std::integral<T>
+  requires (std::floating_point<T> || std::integral<T>) && (N >= 1)
   struct vec
   {
     std::array<T, N> components = {T(0)};
@@ -33,7 +33,7 @@ namespace mr
     // Construction from a lower order vector + scalar (GLSL like)
     constexpr vec(const vec<N - 1, T> &v, T x)
     {
-      // TODO: maybe static_assert N > 1 ?
+      static_assert(N > 1);
       std::ranges::copy(v.components, components.begin());
       components.back() = x;
     }
