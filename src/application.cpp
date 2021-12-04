@@ -174,6 +174,7 @@ namespace mr
   static float s_exposure = 1.0f;
   static float s_bloom_threshold = 1.0f;
   static float s_bloom_knee = 0.01f;
+  static float s_blur_str_multiplier = 1.0f;
 
   // Data
   static std::array<std::vector<grid_cell>, s_depth_layers.size()> s_grids;
@@ -318,8 +319,8 @@ namespace mr
       render_layer(current_grid, view_width, view_height);
 
       // TODO: defide to keep blur or not
-      //s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale, 1.0f - s_depth_layers[i], 1);
-      s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale, 0.0f, 1);
+      s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale, (1.0f - s_depth_layers[i]) * s_blur_str_multiplier, 1);
+      //s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale, 0.0f, 1);
 
       std::swap(tx_dst, tx_src);
     }
@@ -388,6 +389,7 @@ namespace mr
     ImGui::DragFloat("Exposure", &s_exposure, 0.01f, 0.1f, 10.0f);
     ImGui::DragFloat("Bloom Threshold", &s_bloom_threshold, 0.01f, 0.1f, 5.0f);
     ImGui::DragFloat("Bloom Knee", &s_bloom_knee, 0.0f, 0.0f, 0.5f);
+    ImGui::DragFloat("Blur Str Multiplier", &s_blur_str_multiplier, 0.0f, 0.0f, 1.0f);
 
     for (std::size_t i = 0; i < s_color_palette.colors.size(); ++i)
     {
