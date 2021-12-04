@@ -293,6 +293,8 @@ namespace mr
     glClear(GL_COLOR_BUFFER_BIT);
 
     // TODO: not sure about the blur anymore
+    
+    // Blur all the back layers
     for (size_t i = 0; i < s_depth_layers.size() - 1; ++i)
     {
       const auto &current_grid = s_grids[i];
@@ -319,12 +321,12 @@ namespace mr
       // Rendering falling strings
       render_layer(current_grid, view_width, view_height);
 
-      s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale, 1);
+      s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale, 1.0f - s_depth_layers[i], 1);
 
       std::swap(tx_dst, tx_src);
     }
 
-    // Render to final buffer
+    // Render background + top layer
     {
 
       glBindFramebuffer(GL_FRAMEBUFFER, s_tx_final_render);

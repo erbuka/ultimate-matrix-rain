@@ -21,7 +21,7 @@ namespace mr
   public:
     blur_filter();
     ~blur_filter();
-    void apply(const GLuint target, const int32_t width, const int32_t height, const std::size_t iterations);
+    void apply(const GLuint target, const int32_t width, const int32_t height, const float strength, const std::size_t iterations);
   };
 
 

@@ -27,6 +27,7 @@ namespace mr
     #version 330
 
     uniform sampler2D uTexture;
+    uniform float uStrength;
 
     smooth in vec2 fUv;
 
@@ -38,19 +39,21 @@ namespace mr
 
     void main() {
       vec2 step = 1.0 / vec2(textureSize(uTexture, 0));
-      vec4 color = vec4(0.0);
+      vec3 color = vec3(0.0);
 
       for(int i = 0; i < 3; ++i) {
         #if defined(HORIZONTAL)
-          color += texture(uTexture, fUv + vec2(i - 1, 0.0) * step) * KERNEL[i]; 
+          color += texture(uTexture, fUv + vec2(i - 1, 0.0) * step).rgb * KERNEL[i]; 
         #elif defined(VERTICAL)
-          color += texture(uTexture, fUv + vec2(0.0, i - 1) * step) * KERNEL[i]; 
+          color += texture(uTexture, fUv + vec2(0.0, i - 1) * step).rgb * KERNEL[i]; 
         #else 
           #error "You bad person"
         #endif
       }
 
-      oColor = color;
+      vec3 weigthedColor = mix(texture(uTexture, fUv).rgb, color, uStrength);
+
+      oColor = vec4(weigthedColor, 1.0);
 
     }  
   )";
@@ -160,7 +163,7 @@ namespace mr
     glDeleteProgram(m_prg_vblur);
   }
 
-  void blur_filter::apply(const GLuint target, const int32_t width, const int32_t height, const std::size_t iterations)
+  void blur_filter::apply(const GLuint target, const int32_t width, const int32_t height, const float strength, const std::size_t iterations)
   {
 
     std::array passes = {
@@ -184,7 +187,9 @@ namespace mr
         glClear(GL_COLOR_BUFFER_BIT);
 
         glUseProgram(program);
+        glUniform1f(glGetUniformLocation(program, "uStrength"), strength);
         glUniform1i(glGetUniformLocation(program, "uTexture"), 0);
+
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, src);
