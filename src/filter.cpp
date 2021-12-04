@@ -213,7 +213,6 @@ namespace mr
 
   bloom::~bloom()
   {
-    // TODO: cleanup textures and programs
     glDeleteProgram(m_prg_prefilter);
     glDeleteProgram(m_prg_downsample);
     glDeleteProgram(m_prg_upsample);
@@ -280,7 +279,6 @@ namespace mr
     enable_scope scope({GL_BLEND});
     glDisable(GL_BLEND);
 
-    // TODO: check parameters (width, height)
     assert(m_width > 0 && m_height > 0);
 
     // Prefilter

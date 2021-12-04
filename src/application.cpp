@@ -58,11 +58,7 @@ namespace mr
     return result;
   })();
 
-  // TODO: revert to constexpr after
-  static color_palette<2> s_color_palette = {
-      vec3f{0.094f, 1.0f, 0.153f},
-      vec3f{1.0f, 2.0f, 1.0f},
-  };
+
 
   static constexpr std::string_view s_vs_full_screen = R"(
     #version 330
@@ -170,11 +166,17 @@ namespace mr
   static GLuint s_va_quad = 0;
   static GLuint s_vb_quad = 0;
 
-  // Shader params
+  // Shader params (no constexpr because I need to tune them with ImGui)
   static float s_exposure = 1.0f;
   static float s_bloom_threshold = 1.0f;
   static float s_bloom_knee = 0.01f;
   static float s_blur_str_multiplier = 1.0f;
+
+  // Falling strings color palette
+  static color_palette<2> s_color_palette = {
+      vec3f{0.094f, 1.0f, 0.153f},
+      vec3f{1.0f, 2.0f, 1.0f},
+  };
 
   // Data
   static std::array<std::vector<grid_cell>, s_depth_layers.size()> s_grids;
@@ -318,9 +320,7 @@ namespace mr
       // Rendering falling strings
       render_layer(current_grid, view_width, view_height);
 
-      // TODO: defide to keep blur or not
       s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale, (1.0f - s_depth_layers[i]) * s_blur_str_multiplier, 1);
-      //s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale, 0.0f, 1);
 
       std::swap(tx_dst, tx_src);
     }
