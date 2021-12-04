@@ -22,6 +22,7 @@
 #include "filter.h"
 #include "common.h"
 #include "font.h"
+#include "embed.h"
 
 namespace mr
 {
@@ -39,8 +40,8 @@ namespace mr
 
   static constexpr std::int32_t s_col_count = 100;
   static constexpr std::int32_t s_falling_strings_count = 1500;
-  static constexpr std::int32_t s_falling_string_min_length = 5;
-  static constexpr std::int32_t s_falling_string_max_length = 50;
+  static constexpr std::int32_t s_falling_string_min_length = 15;
+  static constexpr std::int32_t s_falling_string_max_length = 40;
   static constexpr std::int32_t s_falling_string_min_speed = 10;
   static constexpr std::int32_t s_falling_string_max_speed = 30;
 
@@ -51,99 +52,15 @@ namespace mr
       1.00,
   };
 
-  static constexpr std::array<float, s_depth_layers.size()> s_depth_layers_fade = ([]{
-    std::array<float, s_depth_layers.size()> result;
-    for (size_t i = 0; i < result.size(); ++i)
-      result[i] = s_depth_layers[i] * s_depth_layers[i];
-    return result;
-  })();
+  static constexpr std::array<float, s_depth_layers.size()> s_depth_layers_fade = ([]
+                                                                                   {
+                                                                                     std::array<float, s_depth_layers.size()> result;
+                                                                                     for (size_t i = 0; i < result.size(); ++i)
+                                                                                       result[i] = s_depth_layers[i] * s_depth_layers[i];
+                                                                                     return result;
+                                                                                   })();
 
 
-
-  static constexpr std::string_view s_vs_full_screen = R"(
-    #version 330
-
-    layout(location = 0) in vec2 aUv;
-
-    smooth out vec2 fUv;
-
-    void main() {
-      gl_Position = vec4(aUv * 2.0 - 1.0, 0.0, 1.0);
-      fUv = aUv;
-    }
-  )";
-
-  static constexpr std::string_view s_fs_pass_trough = R"(
-    #version 330
-
-    uniform sampler2D uTexture;
-
-    smooth in vec2 fUv;
-
-    out vec4 oColor;
-
-    void main() {
-      oColor = texture(uTexture, fUv);
-    }  
-  )";
-
-  static constexpr std::string_view s_fs_hdr = R"(
-    #version 330
-
-    uniform sampler2D uTexture;
-    uniform sampler2D uBloom;
-    uniform float uExposure;
-
-    smooth in vec2 fUv;
-
-    out vec4 oColor;
-
-    void main() {
-      vec3 hdrColor = texture(uTexture, fUv).rgb  + texture(uBloom, fUv).rgb; 
-      vec3 color = vec3(1.0) - exp(-hdrColor * uExposure);
-      oColor = vec4(color, 1.0);
-    }  
-  )";
-
-  static constexpr std::string_view s_vs_strings = R"(
-    #version 330
-
-    uniform float uScreenWidth;
-    uniform float uScreenHeight;
-
-    layout(location = 0) in vec2 aPosition;
-    layout(location = 1) in vec2 aUv;
-    layout(location = 2) in vec4 aColor;
-
-    smooth out vec2 fUv;
-    flat out vec4 fColor;
-
-    void main() {
-      vec2 ndcPos;
-      ndcPos.x = (aPosition.x / uScreenWidth) * 2.0 - 1.0;
-      ndcPos.y = (aPosition.y / uScreenHeight) * -2.0 + 1.0;
-
-      gl_Position = vec4(ndcPos, 0.0, 1.0);
-      fUv = aUv;
-      fColor = aColor;
-    }
-  )";
-
-  static constexpr std::string_view s_fs_strings = R"(
-    #version 330
-
-    uniform sampler2D uFont;
-
-    smooth in vec2 fUv;
-    flat in vec4 fColor;
-    
-    out vec4 oColor;
-
-    void main() {
-      float mask = texture(uFont, fUv).r;
-      oColor = vec4(fColor.rgb, fColor.a * mask);
-    }
-  )";
 
   static GLFWwindow *s_window = nullptr;
 
@@ -169,13 +86,13 @@ namespace mr
   // Shader params (no constexpr because I need to tune them with ImGui)
   static float s_exposure = 1.0f;
   static float s_bloom_threshold = 1.0f;
-  static float s_bloom_knee = 0.01f;
-  static float s_blur_str_multiplier = 1.0f;
+  static float s_bloom_knee = 0.5f;
+  static float s_blur_str_multiplier = 0.5f;
 
   // Falling strings color palette
   static color_palette<2> s_color_palette = {
-      vec3f{0.094f, 1.0f, 0.153f},
-      vec3f{1.0f, 2.0f, 1.0f},
+      vec3f{0.0f, 1.0f, 0.0f},
+      vec3f{0.1f, 2.0f, 0.3f},
   };
 
   // Data
@@ -188,11 +105,12 @@ namespace mr
   // Randomly initialize a falling string. I just use the stantard rand(), it's enough for this project
   static void init_falling_string(falling_string &s)
   {
+
     static constexpr auto get_random_layer = +[]() -> std::size_t
     {
       // cubic on t so that front layers are less likely to come out
       float t = rand() / float(RAND_MAX);
-      return static_cast<std::size_t>(t * t * t * s_depth_layers.size());
+      return static_cast<std::size_t>(t * t * s_depth_layers.size());
     };
 
     s.layer_index = get_random_layer();
@@ -212,6 +130,13 @@ namespace mr
     int32_t x, y;
     glfwGetWindowSize(s_window, &x, &y);
     return std::tuple{float(x), float(y)};
+  }
+
+  static auto get_mouse_pos()
+  {
+    double x, y;
+    glfwGetCursorPos(s_window, &x, &y);
+    return std::tuple{ int32_t(x), int32_t(y) };
   }
 
   static const glyph &get_random_glyph(int32_t x, int32_t y)
@@ -234,7 +159,10 @@ namespace mr
       const float t = float(y - min_y) / (max_y - min_y);
 
       grid_cell cell;
-      cell.set_color({s_color_palette.get(t), t * s_depth_layers_fade[s.layer_index] });
+
+      cell.set_color({s_color_palette.get(t), t * s_depth_layers_fade[s.layer_index]});
+
+      //cell.set_color({s_color_palette.get(t), t });
       cell.set_glyph(get_random_glyph(s.x, y));
       cell.set_position(vec2f{float(s.x), float(y)} * cell_size, cell_size);
 
@@ -353,7 +281,7 @@ namespace mr
     // Draw to screen
     {
       enable_scope scope({GL_BLEND, GL_FRAMEBUFFER_SRGB});
-      
+
       glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
       glDisable(GL_BLEND);
@@ -422,9 +350,8 @@ namespace mr
       glBindFramebuffer(GL_FRAMEBUFFER, s_fb_render_target);
       glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tx, 0);
 
-      glClearColor(0,0,0,1);
+      glClearColor(0, 0, 0, 1);
       glClear(GL_COLOR_BUFFER_BIT);
-
     }
 
     s_fx_bloom->resize(w, h);
@@ -454,13 +381,13 @@ namespace mr
     glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(vertex), (const void *)16);
 
     // Load programs
-    s_prg_strings = load_program(s_vs_strings, s_fs_strings);
-    s_prg_pass_trough = load_program(s_vs_full_screen, s_fs_pass_trough);
-    s_prg_hdr = load_program(s_vs_full_screen, s_fs_hdr);
+    s_prg_strings = load_program(embed::s_vs_strings, embed::s_fs_strings);
+    s_prg_pass_trough = load_program(embed::s_vs_fullscreen, embed::s_fs_pass_trough);
+    s_prg_hdr = load_program(embed::s_vs_fullscreen, embed::s_fs_hdr);
 
     // Load font
     s_font = std::make_unique<font>();
-    s_font->load("assets/font.ttf");
+    s_font->load(embed::s_font.data(), embed::s_font.size());
 
     // Blur filter
     s_blur_filter = std::make_unique<blur_filter>();
@@ -533,7 +460,7 @@ namespace mr
     terminate(-1);
   }
 
-  void run()
+  void run(const launch_config &config)
   {
 
     using clock_t = std::chrono::high_resolution_clock;
@@ -543,7 +470,17 @@ namespace mr
       terminate_with_error("Could not initialize GLFW");
 
     /* Create a windowed mode window and its OpenGL context */
-    s_window = glfwCreateWindow(1280, 768, "Matrix Rain", NULL, NULL);
+
+    if (config.full_screen)
+    {
+      const auto videoMode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+      s_window = glfwCreateWindow(videoMode->width, videoMode->height, "Ultimate Matrix Rain", glfwGetPrimaryMonitor(), NULL);
+    }
+    else
+    {
+      s_window = glfwCreateWindow(1280, 768, "Ultimate Matrix Rain", NULL, NULL);
+    }
+
     if (!s_window)
       terminate_with_error("Could not create window");
 
@@ -552,6 +489,15 @@ namespace mr
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
     glfwSetWindowSizeCallback(s_window, &on_window_resize);
+
+    if (config.exit_on_input)
+    {
+      // TODO: need some delay before mouse callback becasue it is fired immediately when the program starts
+      //glfwSetCursorPosCallback(s_window, +[](GLFWwindow*, double, double ) { terminate(0); });
+      glfwSetKeyCallback(
+          s_window, +[](GLFWwindow *, std::int32_t, std::int32_t, std::int32_t, std::int32_t)
+                    { terminate(0); });
+    }
 
     initialize();
 

@@ -6,138 +6,12 @@
 #include <string_view>
 
 #include "common.h"
+#include "embed.h"
 
 namespace mr
 {
 
-  static constexpr std::string_view s_vs_fullscreen = R"(
-    #version 330
 
-    layout(location = 0) in vec2 aUv;
-
-    smooth out vec2 fUv;
-
-    void main() {
-      gl_Position = vec4(aUv * 2.0 - 1.0, 0.0, 1.0);
-      fUv = aUv;
-    }
-  )";
-
-  static constexpr std::string_view s_fs_blur = R"(
-    #version 330
-
-    uniform sampler2D uTexture;
-    uniform float uStrength;
-
-    smooth in vec2 fUv;
-
-    out vec4 oColor;
-
-    const float KERNEL[3] = float[] (
-      0.25, 0.5, 0.25
-    );
-
-    void main() {
-      vec2 step = 1.0 / vec2(textureSize(uTexture, 0));
-      vec3 color = vec3(0.0);
-
-      for(int i = 0; i < 3; ++i) {
-        #if defined(HORIZONTAL)
-          color += texture(uTexture, fUv + vec2(i - 1, 0.0) * step).rgb * KERNEL[i]; 
-        #elif defined(VERTICAL)
-          color += texture(uTexture, fUv + vec2(0.0, i - 1) * step).rgb * KERNEL[i]; 
-        #else 
-          #error "You bad person"
-        #endif
-      }
-
-      vec3 weigthedColor = mix(texture(uTexture, fUv).rgb, color, uStrength);
-
-      oColor = vec4(weigthedColor, 1.0);
-
-    }  
-  )";
-
-  static constexpr std::string_view s_fs_pass_trough = R"(
-    #version 330
-
-    uniform sampler2D uTexture;
-
-    out vec4 oColor;
-
-    void main() {
-      oColor = texture(uTexture, fUv);
-    }  
-  )";
-
-  static constexpr std::string_view s_fs_bloom_prefilter = R"(
-    #version 330 core
-
-    uniform sampler2D uSource;
-    uniform float uThreshold;
-    uniform float uKnee;
-
-    in vec2 fUv;
-
-    out vec4 oColor;
-
-    void main() {
-        vec3 color = texture(uSource, fUv).rgb;
-        float luma = dot(vec3(0.299, 0.587, 0.114), color);
-        oColor = vec4(smoothstep(uThreshold - uKnee, uThreshold + uKnee, luma) * color,  1.0);
-    }
-  )";
-
-  static constexpr std::string_view s_fs_bloom_downsample = R"(
-    #version 330 core
-
-    uniform sampler2D uSource;
-
-    in vec2 fUv;
-
-    out vec4 oColor;
-
-    void main() {
-        vec2 s = 1.0 / vec2(textureSize(uSource, 0));
-
-        vec3 tl = texture(uSource, fUv + vec2(-s.x, +s.y)).rgb;
-        vec3 tr = texture(uSource, fUv + vec2(+s.x, +s.y)).rgb;
-        vec3 bl = texture(uSource, fUv + vec2(-s.x, -s.y)).rgb;
-        vec3 br = texture(uSource, fUv + vec2(+s.x, -s.y)).rgb;
-
-        oColor = vec4((tl + tr + bl + br) / 4.0,  1.0);
-    }
-  )";
-
-  static constexpr std::string_view s_fs_bloom_upsample = R"(
-    #version 330 core
-
-    uniform sampler2D uPrevious;
-    uniform sampler2D uDownsample;
-
-    in vec2 fUv;
-
-    out vec4 oColor;
-
-    void main() {
-        vec2 s = 1.0 / vec2(textureSize(uDownsample, 0));
-
-        vec3 upsampleColor = vec3(0.0);
-
-        upsampleColor += 1.0 * texture(uDownsample, fUv + vec2(-s.x, +s.y)).rgb;
-        upsampleColor += 2.0 * texture(uDownsample, fUv + vec2(+0.0, +s.y)).rgb;
-        upsampleColor += 1.0 * texture(uDownsample, fUv + vec2(+s.x, +s.y)).rgb;
-        upsampleColor += 2.0 * texture(uDownsample, fUv + vec2(-s.x, +0.0)).rgb;
-        upsampleColor += 4.0 * texture(uDownsample, fUv + vec2(+0.0, +0.0)).rgb;
-        upsampleColor += 2.0 * texture(uDownsample, fUv + vec2(+s.x, +0.0)).rgb;
-        upsampleColor += 1.0 * texture(uDownsample, fUv + vec2(-s.x, -s.y)).rgb;
-        upsampleColor += 2.0 * texture(uDownsample, fUv + vec2(+0.0, -s.y)).rgb;
-        upsampleColor += 1.0 * texture(uDownsample, fUv + vec2(+s.x, -s.y)).rgb;
-        
-        oColor = vec4(upsampleColor / 16.0 + texture(uPrevious, fUv).rgb, 1.0);
-
-    }
-  )";
 
   blur_filter::blur_filter()
   {
@@ -149,8 +23,8 @@ namespace mr
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    m_prg_hblur = load_program(s_vs_fullscreen, s_fs_blur, {"HORIZONTAL"});
-    m_prg_vblur = load_program(s_vs_fullscreen, s_fs_blur, {"VERTICAL"});
+    m_prg_hblur = load_program(embed::s_vs_fullscreen, embed::s_fs_blur, {"HORIZONTAL"});
+    m_prg_vblur = load_program(embed::s_vs_fullscreen, embed::s_fs_blur, {"VERTICAL"});
 
     std::tie(m_quad_va, m_quad_vb) = create_full_screen_quad();
   }
@@ -204,9 +78,9 @@ namespace mr
   bloom::bloom()
   {
     glGenFramebuffers(1, &m_fb_render_target);
-    m_prg_prefilter = load_program(s_vs_fullscreen, s_fs_bloom_prefilter);
-    m_prg_downsample = load_program(s_vs_fullscreen, s_fs_bloom_downsample);
-    m_prg_upsample = load_program(s_vs_fullscreen, s_fs_bloom_upsample);
+    m_prg_prefilter = load_program(embed::s_vs_fullscreen, embed::s_fs_bloom_prefilter);
+    m_prg_downsample = load_program(embed::s_vs_fullscreen, embed::s_fs_bloom_downsample);
+    m_prg_upsample = load_program(embed::s_vs_fullscreen, embed::s_fs_bloom_upsample);
 
     std::tie(m_quad_va, m_quad_vb) = create_full_screen_quad();
   }

@@ -27,6 +27,7 @@ namespace mr
     font() = default;
     ~font();
 
+    void load(const unsigned char* data, const size_t length);
     void load(const std::string_view file_name);
     const GLuint get_texture() const { return m_texture; }
     const std::vector<glyph> &get_glyphs() const { return m_glyphs; }

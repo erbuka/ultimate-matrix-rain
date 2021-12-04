@@ -14,25 +14,8 @@ namespace mr
   static constexpr std::int32_t s_bitmap_width = 1024;
   static constexpr std::int32_t s_bitmap_height = 1024;
 
-  void font::load(const std::string_view file_name)
+  void font::load(const unsigned char *font_data, const size_t length)
   {
-    std::ifstream is;
-
-    is.open(file_name.data(), std::ios_base::binary);
-
-    if (!is.is_open())
-    {
-      terminate_with_error("Could not open font file");
-    }
-
-    std::vector<unsigned char> font_data;
-
-    std::copy(
-        std::istreambuf_iterator<char>(is),
-        std::istreambuf_iterator<char>(),
-        std::back_inserter(font_data));
-
-    is.close();
 
     std::vector<unsigned char> pixels;
     pixels.resize(s_bitmap_width * s_bitmap_height);
@@ -49,7 +32,7 @@ namespace mr
                            .num_chars = 'z' - 'a',
                            .chardata_for_range = new stbtt_packedchar['z' - 'a']});
 
-    stbtt_PackFontRanges(&pack_context, font_data.data(), 0, pack_ranges.data(), pack_ranges.size());
+    stbtt_PackFontRanges(&pack_context, font_data, 0, pack_ranges.data(), pack_ranges.size());
 
     stbtt_PackEnd(&pack_context);
 
@@ -82,9 +65,31 @@ namespace mr
 
       // Delete font ranges
       delete[] range.chardata_for_range;
+    }
+  }
 
+  void font::load(const std::string_view file_name)
+  {
+    std::ifstream is;
+
+    is.open(file_name.data(), std::ios_base::binary);
+
+    if (!is.is_open())
+    {
+      terminate_with_error("Could not open font file");
     }
 
+    std::vector<unsigned char> font_data;
+
+    std::copy(
+        std::istreambuf_iterator<char>(is),
+        std::istreambuf_iterator<char>(),
+        std::back_inserter(font_data));
+
+    is.close();
+
+    load(font_data.data(), font_data.size());
+    
   }
 
   font::~font()

@@ -132,10 +132,6 @@ project "MatrixRain"
 
     links { "Glad", "GLFW" }
 
-    -- TODO: delete assets before copy
-    postbuildcommands {
-        "{COPY} ../src/assets ../bin/%{cfg.buildcfg}/%{prj.name}/assets"
-    }
 
     filter "configurations:Debug"
       links { "ImGui" }
