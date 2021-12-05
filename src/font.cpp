@@ -19,14 +19,13 @@ namespace mr
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
       "0123456789";
 
+  // So it seems that consteval doesn't imply const
   static consteval auto get_code_points()
   {
     std::array<std::int32_t, s_characters.size()> ret = {0};
     std::ranges::transform(s_characters, ret.begin(), [](const char c) { return static_cast<std::int32_t>(c); });
     return ret;
   };
-
-  //TODO: add more characters from th actual font
 
   void font::load(const unsigned char *font_data, const size_t length)
   {
