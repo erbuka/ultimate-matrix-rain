@@ -40,6 +40,7 @@ namespace mr
   using clock_t = std::chrono::high_resolution_clock;
 
   // Fixed animation settings
+  static constexpr float s_glyph_swaps_per_second = 10.0f; // Number of glyphs swapped per second
   static constexpr std::int32_t s_blur_scale = 1;
   static constexpr std::int32_t s_col_count = 80;
   static constexpr std::int32_t s_falling_strings_count = 1500;
@@ -113,15 +114,9 @@ namespace mr
   // Randomly initialize a falling string. I just use the stantard rand(), it's enough for this project
   static void init_falling_string(falling_string &s, const float view_height)
   {
+    const float t = rand() / float(RAND_MAX);
 
-    static constexpr auto get_random_layer = +[]() -> std::size_t
-    {
-      // cubic on t so that front layers are less likely to come out
-      float t = rand() / float(RAND_MAX);
-      return static_cast<std::size_t>(t * t * s_depth_layers.size());
-    };
-
-    s.layer_index = get_random_layer();
+    s.layer_index = static_cast<std::size_t>(t * t * s_depth_layers.size());
     s.speed = s_falling_string_min_speed + rand() % (s_falling_string_max_speed - s_falling_string_min_speed);
     s.length = s_falling_string_min_length + rand() % (s_falling_string_max_length - s_falling_string_min_length);
 
@@ -131,12 +126,12 @@ namespace mr
 
     // TODO: try to still improve this
     // The initial y position is actually randomized to be off screen.
-    s.y = -(s.length + rand() % static_cast<int32_t>(view_height / s_depth_layers[s.layer_index]));
+    s.y = -(s.length + rand() % static_cast<std::int32_t>(view_height / s_depth_layers[s.layer_index]));
   }
 
   static auto get_window_size()
   {
-    int32_t x, y;
+    std::int32_t x, y;
     glfwGetWindowSize(s_window, &x, &y);
     return std::tuple{float(x), float(y)};
   }
@@ -144,19 +139,20 @@ namespace mr
   static auto get_view_size()
   {
     const auto [w, h] = get_window_size();
-    return std::tuple{static_cast<int32_t>(s_col_count), static_cast<int32_t>(h / w * s_col_count)};
+    return std::tuple{static_cast<std::int32_t>(s_col_count), static_cast<std::int32_t>(h / w * s_col_count)};
   }
 
-  static auto get_mouse_pos()
+  [[maybe_unused]] static auto get_mouse_pos()
   {
     double x, y;
     glfwGetCursorPos(s_window, &x, &y);
-    return std::tuple{int32_t(x), int32_t(y)};
+    return std::tuple{std::int32_t(x), std::int32_t(y)};
   }
 
-  static const glyph &get_random_glyph(int32_t x, int32_t y)
+  static const glyph &get_random_glyph(const std::int32_t x, const std::int32_t y)
   {
-    constexpr size_t s0 = 2836, s1 = 23873;
+    // This numbers are completely made up. Worst hash function ever
+    constexpr std::size_t s0 = 2836, s1 = 23873;
     const auto &glyphs = s_font->get_glyphs();
     const auto idx = static_cast<std::size_t>(x * s0 + y * s1) % glyphs.size();
     return glyphs[idx];
@@ -166,11 +162,11 @@ namespace mr
   {
     const float depth = s_depth_layers[s.layer_index];
     const float cell_size = view_width / s_col_count * depth;
-    const int32_t max_y = std::round(s.y);
-    const int32_t min_y = max_y - s.length + 1;
+    const std::int32_t max_y = std::round(s.y);
+    const std::int32_t min_y = max_y - s.length + 1;
 
     // Update all the characters besides the head (y < max_y)
-    for (int32_t y = min_y; y < max_y; ++y)
+    for (std::int32_t y = min_y; y < max_y; ++y)
     {
       const float t = float(y - min_y) / (max_y - min_y);
 
@@ -184,6 +180,7 @@ namespace mr
     }
 
     // Set the head color (y == max_y)
+    // For the head I use alpha = 1.0f for every layer
     grid_cell head;
     head.set(get_random_glyph(s.x, max_y),
              {s_string_head_color, 1.0f},
@@ -226,9 +223,14 @@ namespace mr
     constexpr float view_width = s_col_count;
     const float view_height = h / w * view_width;
 
-    // Clear grids
+    // Clear grids 
     for (auto &g : s_grids)
       g.clear();
+
+    // Swap some glyphs
+    // TODO: It's not 100% correct but it's ok
+    if(rand() / static_cast<float>(RAND_MAX) < s_glyph_swaps_per_second * dt) 
+      s_font->swap_glyphs(1);
 
     // Update all the falling strings
     for (auto &s : s_falling_strings)
@@ -244,12 +246,11 @@ namespace mr
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    // Blur all the back layers
+    // Render and blur background layers (size - 1) to a texture
     for (size_t i = 0; i < s_depth_layers.size() - 1; ++i)
     {
       const auto &current_grid = s_grids[i];
 
-      // Render to render target
       glBindFramebuffer(GL_FRAMEBUFFER, s_fb_render_target);
       glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tx_dst, 0);
 
@@ -258,7 +259,7 @@ namespace mr
       glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT);
 
-      // Render previous pass (bg)
+      // Render previous pass as background
       glUseProgram(s_prg_pass_trough);
       glUniform1i(glGetUniformLocation(s_prg_pass_trough, "uTexture"), 0);
 
@@ -268,9 +269,10 @@ namespace mr
       glBindVertexArray(s_va_quad);
       glDrawArrays(GL_TRIANGLES, 0, 6);
 
-      // Rendering falling strings
+      // Render the current layer
       render_layer(current_grid, view_width, view_height);
 
+      // Blur the current texture
       s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale, (1.0f - s_depth_layers[i]) * s_blur_str_multiplier, 1);
 
       std::swap(tx_dst, tx_src);
@@ -471,16 +473,16 @@ namespace mr
     exit(exit_code);
   }
 
-  static void on_window_resize(GLFWwindow *window, int32_t w, int32_t h) { resize(); }
+  static void on_window_resize(GLFWwindow*, std::int32_t, std::int32_t) { resize(); }
 
   static void on_key(GLFWwindow *, std::int32_t, std::int32_t, std::int32_t, std::int32_t)
   {
-    if (s_config.exit_on_input && clock_t::now() - s_start_time > s_exit_on_input_delay)
       terminate(0);
   }
 
   static void on_cursor_pos(GLFWwindow *, double, double)
   {
+    // This event is fired immeditately even if the mouse doesn't move, so wait a little bit before actually considering it
     if (s_config.exit_on_input && clock_t::now() - s_start_time > s_exit_on_input_delay)
       terminate(0);
   }
@@ -503,19 +505,17 @@ namespace mr
     if (s_config.full_screen)
     {
       const auto videoMode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-      s_window = glfwCreateWindow(videoMode->width, videoMode->height, "Ultimate Matrix Rain", glfwGetPrimaryMonitor(), NULL);
-      // TODO: this doens't seem to be working
-      glfwSetInputMode(s_window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+      s_window = glfwCreateWindow(videoMode->width, videoMode->height, "Ultimate Matrix Rain", glfwGetPrimaryMonitor(), nullptr);
+      glfwSetInputMode(s_window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN); // TODO: this doesn't seem to be working
     }
     else
     {
-      s_window = glfwCreateWindow(1280, 768, "Ultimate Matrix Rain", NULL, NULL);
+      s_window = glfwCreateWindow(1280, 768, "Ultimate Matrix Rain", nullptr, nullptr);
     }
 
     if (!s_window)
       terminate_with_error("Could not create window");
 
-    /* Make the window's context current */
     glfwMakeContextCurrent(s_window);
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 

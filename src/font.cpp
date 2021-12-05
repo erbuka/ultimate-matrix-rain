@@ -29,7 +29,7 @@ namespace mr
     return ret;
   };
 
-  void font::load(const unsigned char *font_data, const size_t length)
+  void font::load(const unsigned char *font_data, [[maybe_unused]] const size_t length)
   {
 
     std::vector<unsigned char> pixels;
@@ -117,6 +117,17 @@ namespace mr
 
     load(font_data.data(), font_data.size());
   }
+
+  void font::swap_glyphs(const std::size_t count)
+  {
+    for(std::size_t i = 0; i < count; ++i)
+    {
+      const std::size_t idx0 = rand() % m_glyphs.size();
+      const std::size_t idx1 = rand() % m_glyphs.size();
+      std::swap(m_glyphs[idx0], m_glyphs[idx1]);
+    }
+  }
+  
 
   font::~font()
   {

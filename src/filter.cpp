@@ -49,9 +49,9 @@ namespace mr
     enable_scope scope{GL_BLEND};
     glDisable(GL_BLEND);
 
-    for (auto it = 0; it < iterations; ++it)
+    for (std::size_t it = 0; it < iterations; ++it)
     {
-      for (const auto [dst, src, program] : passes)
+      for (const auto& [dst, src, program] : passes)
       {
         glBindTexture(GL_TEXTURE_2D, dst);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);

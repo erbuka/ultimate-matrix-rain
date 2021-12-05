@@ -11,7 +11,7 @@ workspace "MatrixRain"
 
     filter "configurations:Release"
         symbols "Off"
-        optimize "On"
+        optimize "Full"
 
 
     filter "system:windows"
@@ -21,6 +21,8 @@ project "Glad"
     location(_ACTION)
     kind "StaticLib"
     language "C"
+    warnings "Default"
+
 
     objdir "bin-int/%{cfg.buildcfg}/%{prj.name}"
     targetdir "bin/%{cfg.buildcfg}/%{prj.name}"
@@ -33,6 +35,7 @@ project "ImGui"
     location(_ACTION)
     kind "StaticLib"
     language "C++"
+    warnings "Default"
 
     objdir "bin-int/%{cfg.buildcfg}/%{prj.name}"
     targetdir "bin/%{cfg.buildcfg}/%{prj.name}"
@@ -57,6 +60,7 @@ project "GLFW"
     location(_ACTION)
     kind "StaticLib"
     language "C"
+    warnings "Default"
 
     objdir "bin-int/%{cfg.buildcfg}/%{prj.name}"
     targetdir "bin/%{cfg.buildcfg}/%{prj.name}"
@@ -135,6 +139,7 @@ project "MatrixRain"
     filter "configurations:Debug"
       links { "ImGui" }
       includedirs { "vendor/imgui" }
+      warnings "Extra"
 
     filter "system:windows"
         links { "opengl32" }

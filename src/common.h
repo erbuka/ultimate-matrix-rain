@@ -95,27 +95,6 @@ namespace mr
 
   };
 
-  // TODO: remove if unused
-  // A helper class to interpolate between multiple colors given a value in [0, 1]
-  // Basically, a equally spaced multicolor grandient
-  template <std::size_t N>
-  struct color_palette
-  {
-    std::array<vec3f, N> colors;
-
-    constexpr vec3f get(const float t) const
-    {
-      const int32_t idx0 = t * (N - 1);
-      if (idx0 >= N - 1)
-        return colors[N - 1];
-      else
-      {
-        const float t0 = t * (N - 1) - idx0;
-        return colors[idx0] * (1.0f - t0) + colors[idx0 + 1] * t0;
-      }
-    }
-  };
-
   std::tuple<GLuint, GLuint> create_full_screen_quad();
   GLuint load_program(const std::string_view vs_source, const std::string_view fs_source, const std::initializer_list<std::string_view> &defines = {});
 
