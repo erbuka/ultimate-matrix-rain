@@ -18,8 +18,7 @@ namespace mr
 
   // Generic vector type, just testing some C++20 concepts
   template <std::size_t N, typename T>
-  requires (std::floating_point<T> || std::integral<T>) && (N >= 1)
-  struct vec
+  requires(std::floating_point<T> || std::integral<T>) && (N >= 1) struct vec
   {
     std::array<T, N> components = {T(0)};
 
@@ -57,7 +56,7 @@ namespace mr
 
     template <typename S>
     requires std::is_convertible_v<S, T>
-        vec operator*(const S s) const
+    constexpr vec operator*(const S s) const
     {
       vec r;
       for (std::size_t i = 0; i < N; ++i)
@@ -96,10 +95,11 @@ namespace mr
 
     // It sets the texture coordinates based on the given glyph
     void set_glyph(const glyph &g);
-    
+
     void set_position(const vec2f pos, const float size);
   };
 
+  // TODO: remove if unused
   // A helper class to interpolate between multiple colors given a value in [0, 1]
   // Basically, a equally spaced multicolor grandient
   template <std::size_t N>
@@ -107,7 +107,7 @@ namespace mr
   {
     std::array<vec3f, N> colors;
 
-    const vec3f get(const float t) const
+    constexpr vec3f get(const float t) const
     {
       const int32_t idx0 = t * (N - 1);
       if (idx0 >= N - 1)
@@ -121,7 +121,7 @@ namespace mr
   };
 
   std::tuple<GLuint, GLuint> create_full_screen_quad();
-  GLuint load_program(const std::string_view vs_source, const std::string_view fs_source, const std::initializer_list<std::string_view>& defines = {});
+  GLuint load_program(const std::string_view vs_source, const std::string_view fs_source, const std::initializer_list<std::string_view> &defines = {});
 
   // Helper class for staking OpenGL enable bits. Standard OpenGL does not support operations like glPush**, so
   // this is kind of useful when there are a lot of render passes
@@ -129,6 +129,7 @@ namespace mr
   {
   private:
     std::unordered_map<GLenum, bool> m_bits;
+
   public:
     enable_scope(const std::initializer_list<GLenum> &bits);
     ~enable_scope();

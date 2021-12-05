@@ -91,15 +91,13 @@ namespace mr
 
   // Shader params (no constexpr because I need to tune them with ImGui)
   static float s_exposure = 1.0f;
-  static float s_bloom_threshold = 1.0f;
+  static float s_bloom_threshold = 0.7f;
   static float s_bloom_knee = 0.5f;
   static float s_blur_str_multiplier = 0.5f;
 
   // Falling strings color palette
-  static color_palette<2> s_color_palette = {
-      vec3f{0.0f, 1.0f, 0.0f},
-      vec3f{0.1f, 2.0f, 0.3f},
-  };
+  static vec3f s_string_color = {0.1f, 1.5f, 0.2f};
+  static vec3f s_string_head_color = {0.7f, 1.0f, 0.7f};
 
   // Config
   static launch_config s_config;
@@ -171,20 +169,25 @@ namespace mr
     const int32_t max_y = std::round(s.y);
     const int32_t min_y = max_y - s.length + 1;
 
-    for (int32_t y = min_y; y <= max_y; ++y)
+    // Update all the characters besides the head (y < max_y)
+    for (int32_t y = min_y; y < max_y; ++y)
     {
       const float t = float(y - min_y) / (max_y - min_y);
 
       grid_cell cell;
-
-      cell.set_color({s_color_palette.get(t), t * s_depth_layers_fade[s.layer_index]});
-
-      //cell.set_color({s_color_palette.get(t), t });
+      cell.set_color({s_string_color * t, t * s_depth_layers_fade[s.layer_index]});
       cell.set_glyph(get_random_glyph(s.x, y));
       cell.set_position(vec2f{float(s.x), float(y)} * cell_size, cell_size);
 
       s_grids[s.layer_index].push_back(cell);
     }
+
+    // Set the head color (y == max_y) 
+    grid_cell head;
+    head.set_color({s_string_head_color, 1.0f});
+    head.set_glyph(get_random_glyph(s.x, max_y));
+    head.set_position(vec2f{float(s.x), float(max_y)} * cell_size, cell_size);
+    s_grids[s.layer_index].push_back(head);
 
     // Move this string down
     s.y += dt * s.speed;
@@ -335,13 +338,8 @@ namespace mr
     ImGui::DragFloat("Bloom Threshold", &s_bloom_threshold, 0.01f, 0.1f, 5.0f);
     ImGui::DragFloat("Bloom Knee", &s_bloom_knee, 0.0f, 0.0f, 0.5f);
     ImGui::DragFloat("Blur Str Multiplier", &s_blur_str_multiplier, 0.0f, 0.0f, 1.0f);
-
-    for (std::size_t i = 0; i < s_color_palette.colors.size(); ++i)
-    {
-      char buffer[20];
-      sprintf(buffer, "Palette #%ld", i);
-      ImGui::ColorEdit3(buffer, s_color_palette.colors[i].components.data(), ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
-    }
+    ImGui::ColorEdit3("String Color", s_string_color.components.data(), ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit3("String Head Color", s_string_head_color.components.data(), ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
 
     ImGui::End();
 
