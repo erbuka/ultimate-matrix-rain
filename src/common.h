@@ -80,6 +80,7 @@ namespace mr
   };
 
   // A cell grid is basically a quad(2 triangles, 6 vertices) with some helper functions
+  // TODO: rename
   struct grid_cell
   {
     std::array<vertex, 6> vertices;

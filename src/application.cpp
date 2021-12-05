@@ -30,7 +30,7 @@ namespace mr
 
   struct falling_string
   {
-    std::int32_t x = 0.0f;
+    std::int32_t x = 0;
     float y = 0.0f;
     float speed = 0.0f;
     size_t layer_index = 0;
@@ -39,8 +39,8 @@ namespace mr
 
   using clock_t = std::chrono::high_resolution_clock;
 
+  // Fixed animation settings
   static constexpr std::int32_t s_blur_scale = 1;
-
   static constexpr std::int32_t s_col_count = 100;
   static constexpr std::int32_t s_falling_strings_count = 1500;
   static constexpr std::int32_t s_falling_string_min_length = 15;
@@ -67,6 +67,7 @@ namespace mr
 
   static GLFWwindow *s_window = nullptr;
 
+  // Programs
   static GLuint s_prg_hdr = 0;
   static GLuint s_prg_strings = 0;
   static GLuint s_prg_pass_trough = 0;
@@ -74,6 +75,7 @@ namespace mr
   static GLuint s_va = 0; // Vertex Array
   static GLuint s_vb = 0; // Vertex Buffer
 
+  // Framebuffer
   static GLuint s_fb_render_target = 0;
 
   // Final render texture
@@ -83,6 +85,7 @@ namespace mr
   static GLuint s_tx_blur0 = 0;
   static GLuint s_tx_blur1 = 0;
 
+  // Full screen quad vertex array & vertex buffer
   static GLuint s_va_quad = 0;
   static GLuint s_vb_quad = 0;
 
