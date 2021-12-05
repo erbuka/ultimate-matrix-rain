@@ -13,6 +13,10 @@ namespace mr
   struct glyph
   {
     vec2f uv0, uv1;
+    // The glyph offset relative to the origin, normalized by font size
+    vec2f norm_offset;
+    // The glyph size normalized with the font size
+    vec2f norm_size; 
   };
 
   struct font

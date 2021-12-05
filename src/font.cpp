@@ -11,6 +11,7 @@
 namespace mr
 {
 
+  static constexpr float s_font_size = 64.0f;
   static constexpr std::int32_t s_bitmap_width = 1024;
   static constexpr std::int32_t s_bitmap_height = 1024;
 
@@ -23,7 +24,8 @@ namespace mr
   static consteval auto get_code_points()
   {
     std::array<std::int32_t, s_characters.size()> ret = {0};
-    std::ranges::transform(s_characters, ret.begin(), [](const char c) { return static_cast<std::int32_t>(c); });
+    std::ranges::transform(s_characters, ret.begin(), [](const char c)
+                           { return static_cast<std::int32_t>(c); });
     return ret;
   };
 
@@ -41,7 +43,7 @@ namespace mr
     auto code_points = get_code_points();
 
     std::vector<stbtt_pack_range> pack_ranges;
-    pack_ranges.push_back({.font_size = 32.0f,
+    pack_ranges.push_back({.font_size = s_font_size,
                            .first_unicode_codepoint_in_range = 0,
                            .array_of_unicode_codepoints = code_points.data(),
                            .num_chars = code_points.size(),
@@ -69,14 +71,22 @@ namespace mr
         // Sadly it is a classic bitmap, so point (0, 0) is a the top left corner, and each glyph coordinates are given
         // in pixel space. So I need to invert the y-axis to get OpenGL uv coordinates
         m_glyphs.push_back({
-            .uv0 = {
-                float(ginfo.x0) / s_bitmap_width,
-                float(ginfo.y1) / s_bitmap_height,
-            },
-            .uv1 = {
-                float(ginfo.x1) / s_bitmap_width,
-                float(ginfo.y0) / s_bitmap_height,
-            },
+          .uv0 = {
+            float(ginfo.x0) / s_bitmap_width,
+            float(ginfo.y1) / s_bitmap_height,
+          },
+          .uv1 = {
+            float(ginfo.x1) / s_bitmap_width,
+            float(ginfo.y0) / s_bitmap_height,
+          },
+          .norm_offset = {
+            float(ginfo.xoff) / s_font_size,
+            float(ginfo.yoff) / s_font_size
+          },
+          .norm_size = {
+            float(ginfo.x1 - ginfo.x0) / s_font_size,
+            float(ginfo.y1 - ginfo.y0) / s_font_size
+          }
         });
       }
 

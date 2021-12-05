@@ -121,34 +121,41 @@ namespace mr
     return std::tuple{va, vb};
   }
 
-  void grid_cell::set_color(const vec4f &c)
+  void grid_cell::set(const glyph &g, const vec4f &c, const vec2f &pos, const float size)
   {
+    // Same color for every vertex, easy
     for (auto &v : vertices)
       v.color = c;
-  }
 
-  void grid_cell::set_glyph(const glyph &g)
-  {
+
+    // Uv coming directly from the glyph
     vertices[0].uv = {g.uv0[0], g.uv1[1]};
     vertices[1].uv = {g.uv0[0], g.uv0[1]};
     vertices[2].uv = {g.uv1[0], g.uv1[1]};
     vertices[3].uv = {g.uv0[0], g.uv0[1]};
     vertices[4].uv = {g.uv1[0], g.uv0[1]};
     vertices[5].uv = {g.uv1[0], g.uv1[1]};
-  }
 
-  void grid_cell::set_position(const vec2f pixel_pos, const float pixel_size)
-  {
 
-    const float fx = pixel_pos[0];
-    const float fy = pixel_pos[1];
+    /* This works as follows:
+      - The given position "pos" is supposed to in view coordinates
+      - The cell is square of size "size", but the glyph is not a square
+      - This is where the glyph's properties come useful:
+        - norm_offset is the offset from glyph origin
+        - norm_size is the actual size of the glyph
+      - These properties are normalized in [0, 1] so we can easily scale them by the cell size
+    */
+    const float fx = pos[0] + g.norm_offset[0] * size;
+    const float fy = pos[1] + g.norm_offset[1] * size;
+    const float nwidth = g.norm_size[0] * size;
+    const float nheight = g.norm_size[1] * size;
 
     vertices[0].position = {fx, fy};
-    vertices[1].position = {fx, fy + pixel_size};
-    vertices[2].position = {fx + pixel_size, fy};
-    vertices[3].position = {fx, fy + pixel_size};
-    vertices[4].position = {fx + pixel_size, fy + pixel_size};
-    vertices[5].position = {fx + pixel_size, fy};
+    vertices[1].position = {fx, fy + nheight};
+    vertices[2].position = {fx + nwidth, fy};
+    vertices[3].position = {fx, fy + nheight};
+    vertices[4].position = {fx + nwidth, fy + nheight};
+    vertices[5].position = {fx + nwidth, fy};
   }
 
   enable_scope::enable_scope(const std::initializer_list<GLenum> &bits)

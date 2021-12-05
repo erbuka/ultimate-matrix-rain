@@ -90,13 +90,9 @@ namespace mr
     auto begin() { return vertices.begin(); }
     auto end() { return vertices.end(); }
 
-    // Sets the color for all vertices
-    void set_color(const vec4f &c);
+    /* Updates this character with the given parameters */
+    void set(const glyph& g, const vec4f& color, const vec2f& pos, const float size);
 
-    // It sets the texture coordinates based on the given glyph
-    void set_glyph(const glyph &g);
-
-    void set_position(const vec2f pos, const float size);
   };
 
   // TODO: remove if unused

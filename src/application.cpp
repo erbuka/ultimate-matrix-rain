@@ -41,7 +41,7 @@ namespace mr
 
   // Fixed animation settings
   static constexpr std::int32_t s_blur_scale = 1;
-  static constexpr std::int32_t s_col_count = 100;
+  static constexpr std::int32_t s_col_count = 80;
   static constexpr std::int32_t s_falling_strings_count = 1500;
   static constexpr std::int32_t s_falling_string_min_length = 15;
   static constexpr std::int32_t s_falling_string_max_length = 40;
@@ -175,18 +175,21 @@ namespace mr
       const float t = float(y - min_y) / (max_y - min_y);
 
       grid_cell cell;
-      cell.set_color({s_string_color * t, t * s_depth_layers_fade[s.layer_index]});
-      cell.set_glyph(get_random_glyph(s.x, y));
-      cell.set_position(vec2f{float(s.x), float(y)} * cell_size, cell_size);
+      cell.set(get_random_glyph(s.x, y),
+               {s_string_color * t, t * s_depth_layers_fade[s.layer_index]},
+               vec2f{float(s.x), float(y)} * cell_size,
+               cell_size);
 
       s_grids[s.layer_index].push_back(cell);
     }
 
-    // Set the head color (y == max_y) 
+    // Set the head color (y == max_y)
     grid_cell head;
-    head.set_color({s_string_head_color, 1.0f});
-    head.set_glyph(get_random_glyph(s.x, max_y));
-    head.set_position(vec2f{float(s.x), float(max_y)} * cell_size, cell_size);
+    head.set(get_random_glyph(s.x, max_y),
+             {s_string_head_color, 1.0f},
+             vec2f{float(s.x), float(max_y)} * cell_size,
+             cell_size);
+
     s_grids[s.layer_index].push_back(head);
 
     // Move this string down
