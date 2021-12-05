@@ -1,5 +1,6 @@
 #include "application.h"
 
+#include <thread>
 #include <memory>
 #include <algorithm>
 #include <chrono>
@@ -36,6 +37,8 @@ namespace mr
     std::int32_t length = 0;
   };
 
+  using clock_t = std::chrono::high_resolution_clock;
+
   static constexpr std::int32_t s_blur_scale = 1;
 
   static constexpr std::int32_t s_col_count = 100;
@@ -60,7 +63,7 @@ namespace mr
                                                                                      return result;
                                                                                    })();
 
-
+  static constexpr auto s_exit_on_input_delay = std::chrono::milliseconds(1500);
 
   static GLFWwindow *s_window = nullptr;
 
@@ -95,6 +98,10 @@ namespace mr
       vec3f{0.1f, 2.0f, 0.3f},
   };
 
+  // Config
+  static launch_config s_config;
+  static clock_t::time_point s_start_time;
+
   // Data
   static std::array<std::vector<grid_cell>, s_depth_layers.size()> s_grids;
   static std::array<falling_string, s_falling_strings_count> s_falling_strings;
@@ -103,7 +110,7 @@ namespace mr
   static std::unique_ptr<bloom> s_fx_bloom;
 
   // Randomly initialize a falling string. I just use the stantard rand(), it's enough for this project
-  static void init_falling_string(falling_string &s)
+  static void init_falling_string(falling_string &s, const float view_height)
   {
 
     static constexpr auto get_random_layer = +[]() -> std::size_t
@@ -121,8 +128,9 @@ namespace mr
     const int32_t col_count = s_col_count / s_depth_layers[s.layer_index];
     s.x = rand() % col_count;
 
-    // The initial y position is actually randomized to be off screen. This gives more variance at the start of the program
-    s.y = -(s.length + rand() % s_falling_string_max_length);
+    // TODO: try to still improve this
+    // The initial y position is actually randomized to be off screen.
+    s.y = -(s.length + rand() % static_cast<int32_t>(view_height / s_depth_layers[s.layer_index]));
   }
 
   static auto get_window_size()
@@ -132,11 +140,17 @@ namespace mr
     return std::tuple{float(x), float(y)};
   }
 
+  static auto get_view_size()
+  {
+    const auto [w, h] = get_window_size();
+    return std::tuple{static_cast<int32_t>(s_col_count), static_cast<int32_t>(h / w * s_col_count)};
+  }
+
   static auto get_mouse_pos()
   {
     double x, y;
     glfwGetCursorPos(s_window, &x, &y);
-    return std::tuple{ int32_t(x), int32_t(y) };
+    return std::tuple{int32_t(x), int32_t(y)};
   }
 
   static const glyph &get_random_glyph(int32_t x, int32_t y)
@@ -174,7 +188,7 @@ namespace mr
 
     // If the string is out of screen, reset it
     if (min_y * cell_size >= view_height)
-      init_falling_string(s);
+      init_falling_string(s, view_height);
   }
 
   static void render_layer(const std::vector<grid_cell> &cells, const float view_width, const float view_height)
@@ -338,6 +352,11 @@ namespace mr
   {
 
     const auto [w, h] = get_window_size();
+    const auto [vw, vh] = get_view_size();
+
+    // Initilize falling strings
+    for (auto &s : s_falling_strings)
+      init_falling_string(s, vh);
 
     glBindTexture(GL_TEXTURE_2D, s_tx_final_render);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
@@ -423,10 +442,6 @@ namespace mr
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-    // Initilize falling strings
-    for (auto &s : s_falling_strings)
-      init_falling_string(s);
-
     // Initialize and resize stuff
     resize();
 
@@ -440,8 +455,6 @@ namespace mr
 #endif
   }
 
-  static void on_window_resize(GLFWwindow *window, int32_t w, int32_t h) { resize(); }
-
   static void terminate(const int32_t exit_code)
   {
     // Force destructors before glfwTerminate (otherwise it causes segmentaion fault)
@@ -454,6 +467,20 @@ namespace mr
     exit(exit_code);
   }
 
+  static void on_window_resize(GLFWwindow *window, int32_t w, int32_t h) { resize(); }
+
+  static void on_key(GLFWwindow *, std::int32_t, std::int32_t, std::int32_t, std::int32_t)
+  {
+    if (s_config.exit_on_input && clock_t::now() - s_start_time > s_exit_on_input_delay)
+      terminate(0);
+  }
+
+  static void on_cursor_pos(GLFWwindow *, double, double)
+  {
+    if (s_config.exit_on_input && clock_t::now() - s_start_time > s_exit_on_input_delay)
+      terminate(0);
+  }
+
   void terminate_with_error(const std::string_view descr)
   {
     std::cerr << descr << '\n';
@@ -463,18 +490,18 @@ namespace mr
   void run(const launch_config &config)
   {
 
-    using clock_t = std::chrono::high_resolution_clock;
+    s_config = config;
 
     /* Initialize the library */
     if (!glfwInit())
       terminate_with_error("Could not initialize GLFW");
 
-    /* Create a windowed mode window and its OpenGL context */
-
-    if (config.full_screen)
+    if (s_config.full_screen)
     {
       const auto videoMode = glfwGetVideoMode(glfwGetPrimaryMonitor());
       s_window = glfwCreateWindow(videoMode->width, videoMode->height, "Ultimate Matrix Rain", glfwGetPrimaryMonitor(), NULL);
+      // TODO: this doens't seem to be working
+      glfwSetInputMode(s_window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
     }
     else
     {
@@ -489,18 +516,12 @@ namespace mr
     gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 
     glfwSetWindowSizeCallback(s_window, &on_window_resize);
-
-    if (config.exit_on_input)
-    {
-      // TODO: need some delay before mouse callback becasue it is fired immediately when the program starts
-      //glfwSetCursorPosCallback(s_window, +[](GLFWwindow*, double, double ) { terminate(0); });
-      glfwSetKeyCallback(
-          s_window, +[](GLFWwindow *, std::int32_t, std::int32_t, std::int32_t, std::int32_t)
-                    { terminate(0); });
-    }
+    glfwSetCursorPosCallback(s_window, &on_cursor_pos);
+    glfwSetKeyCallback(s_window, &on_key);
 
     initialize();
 
+    s_start_time = clock_t::now();
     auto prev_time = clock_t::now();
     auto current_time = clock_t::now();
 

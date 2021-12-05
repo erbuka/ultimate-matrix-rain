@@ -124,7 +124,6 @@ project "MatrixRain"
         "src",
         "vendor/glad/include",
         "vendor/glfw/include",
-        "vendor/imgui",
         "vendor/stb"
     }
 
@@ -135,6 +134,7 @@ project "MatrixRain"
 
     filter "configurations:Debug"
       links { "ImGui" }
+      includedirs { "vendor/imgui" }
 
     filter "system:windows"
         links { "opengl32" }

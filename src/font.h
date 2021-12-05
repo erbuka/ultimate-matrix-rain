@@ -7,8 +7,6 @@
 
 #include "common.h"
 
-// TODO: embed font in source code, get rid of assets
-
 namespace mr
 {
 
