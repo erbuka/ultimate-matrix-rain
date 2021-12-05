@@ -14,6 +14,20 @@ namespace mr
   static constexpr std::int32_t s_bitmap_width = 1024;
   static constexpr std::int32_t s_bitmap_height = 1024;
 
+  static constexpr std::string_view s_characters =
+      "abcdefghijklmnopqrstuvwxyz"
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      "0123456789";
+
+  static consteval auto get_code_points()
+  {
+    std::array<std::int32_t, s_characters.size()> ret = {0};
+    std::ranges::transform(s_characters, ret.begin(), [](const char c) { return static_cast<std::int32_t>(c); });
+    return ret;
+  };
+
+  //TODO: add more characters from th actual font
+
   void font::load(const unsigned char *font_data, const size_t length)
   {
 
@@ -25,12 +39,14 @@ namespace mr
     stbtt_PackBegin(&pack_context, pixels.data(), s_bitmap_width, s_bitmap_height,
                     0, 2, nullptr);
 
+    auto code_points = get_code_points();
+
     std::vector<stbtt_pack_range> pack_ranges;
     pack_ranges.push_back({.font_size = 32.0f,
-                           .first_unicode_codepoint_in_range = 'a',
-                           .array_of_unicode_codepoints = nullptr,
-                           .num_chars = 'z' - 'a',
-                           .chardata_for_range = new stbtt_packedchar['z' - 'a']});
+                           .first_unicode_codepoint_in_range = 0,
+                           .array_of_unicode_codepoints = code_points.data(),
+                           .num_chars = code_points.size(),
+                           .chardata_for_range = new stbtt_packedchar[code_points.size()]});
 
     stbtt_PackFontRanges(&pack_context, font_data, 0, pack_ranges.data(), pack_ranges.size());
 
@@ -40,6 +56,8 @@ namespace mr
     glGenTextures(1, &m_texture);
     glBindTexture(GL_TEXTURE_2D, m_texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, s_bitmap_width, s_bitmap_height, 0, GL_RED, GL_UNSIGNED_BYTE, pixels.data());
+
+    // For this program, linear filtering works much better than mipmaps
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -89,7 +107,6 @@ namespace mr
     is.close();
 
     load(font_data.data(), font_data.size());
-    
   }
 
   font::~font()

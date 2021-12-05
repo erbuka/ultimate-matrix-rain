@@ -20,13 +20,14 @@ namespace mr
       auto pos = src.find("#version");
       pos = pos == std::string::npos ? 0 : src.find('\n', pos) + 1;
 
-      // No std::format :(
-      for(const auto d: defines) {
-        std::stringstream ss;;
+      // No std::format even on gcc11 :(
+      for (const auto d : defines)
+      {
+        std::stringstream ss;
+        ;
         ss << "#define " << d.data() << '\n';
         src.insert(pos, ss.str());
       }
-
     }
 
     return src;
