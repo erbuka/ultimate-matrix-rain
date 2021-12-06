@@ -20,8 +20,9 @@ namespace mr
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
       "0123456789";
 
-  // So it seems that consteval doesn't imply const
-  static consteval auto get_code_points()
+  // I can make this function consteval in gcc, while VS is complaining that 
+  // "call to immediate function is not a constant expression"
+  static /* consteval */ auto get_code_points()
   {
     std::array<std::int32_t, s_characters.size()> ret = {0};
     std::ranges::transform(s_characters, ret.begin(), [](const char c)
