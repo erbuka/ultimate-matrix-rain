@@ -77,6 +77,16 @@ namespace mr
       return r;
     }
 
+        template <typename S>
+    requires std::is_convertible_v<S, T>
+    constexpr vec operator/(const S s) const
+    {
+      vec r;
+      for (std::size_t i = 0; i < N; ++i)
+        r.components[i] = components[i] / T(s);
+      return r;
+    }
+
     constexpr auto operator[](size_t i) const { return components[i]; }
     auto& operator[](size_t i) { return components[i]; }
   };
@@ -92,9 +102,8 @@ namespace mr
     vec4f color;
   };
 
-  // A cell grid is basically a quad(2 triangles, 6 vertices) with some helper functions
-  // TODO: rename
-  struct grid_cell
+  // A character cell is basically a quad(2 triangles, 6 vertices) with a glyph and some helper functions
+  struct character_cell
   {
     std::array<vertex, 6> vertices;
     vertex &operator[](const size_t i) { return vertices[i]; }

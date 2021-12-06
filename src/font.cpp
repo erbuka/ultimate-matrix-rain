@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <iostream>
 
 #define STB_TRUETYPE_IMPLEMENTATION
 #include <stb_truetype.h>
@@ -107,6 +108,7 @@ namespace mr
       // Delete font ranges
       delete[] range.chardata_for_range;
     }
+
   }
 
   void font::load(const std::string_view file_name)

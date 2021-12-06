@@ -2,6 +2,7 @@
 
 #include <thread>
 #include <memory>
+#include <numeric>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -45,7 +46,7 @@ namespace mr
     std::size_t cur_line = 0;
     std::size_t cur_char = 0;
     float timer = 0.5f;
-    bool done = false;
+    bool done = false; // TODO: use global state
   };
 
   using clock_t = std::chrono::high_resolution_clock;
@@ -54,17 +55,17 @@ namespace mr
   static auto get_window_size();
   static auto get_view_size();
   static auto get_mouse_pos();
-  
+
   static const glyph &get_random_glyph(const std::int32_t x, const std::int32_t y);
   static void init_falling_string(falling_string &s, const float view_height);
   static void update_falling_string(falling_string &s, const float dt, const float view_width, const float view_height);
 
   static void render_debug_gui();
-  static void render_characters(const std::vector<grid_cell> &cells, const float view_width, const float view_height);
+  static void render_characters(const std::vector<character_cell> &cells, const font& font, const float view_width, const float view_height);
   static void render_terminal(const float dt);
   static void render_code(const float dt);
   static void render_hdr_to_screen(const GLuint tx_base, const GLuint tx_bloom);
-  
+
   static void resize();
   static void initialize();
   static void terminate(const int32_t exit_code);
@@ -97,9 +98,9 @@ namespace mr
                                                                                    })();
 
   static constexpr std::array s_terminal_lines = {
-      "WAKE UP NEO"sv,
-      "THE MATRIX HAS YOU"sv,
-      "FOLLOW THE WHITE RABBIT"sv};
+      "Wake up Neo"sv,
+      "The Matrix has you"sv,
+      "Follow the white rabbit"sv};
 
   static constexpr auto s_exit_on_input_delay = std::chrono::milliseconds(1500);
 
@@ -134,7 +135,6 @@ namespace mr
   static float s_blur_str_multiplier = 0.5f;
 
   // Colors
-  static vec3f s_terminal_color = {0.1f, 0.6f, 0.2f};
   static vec3f s_string_color = {0.1f, 1.5f, 0.2f};
   static vec3f s_string_head_color = {0.7f, 1.0f, 0.7f};
 
@@ -144,10 +144,10 @@ namespace mr
 
   // Data
   static terminal_state s_terminal_state;
-  static std::vector<grid_cell> s_terminal_cells;
-  static std::array<std::vector<grid_cell>, s_depth_layers.size()> s_grids;
+  static std::vector<character_cell> s_terminal_cells;
+  static std::array<std::vector<character_cell>, s_depth_layers.size()> s_grids;
   static std::array<falling_string, s_falling_strings_count> s_falling_strings;
-  static std::unique_ptr<font> s_font;
+  static std::unique_ptr<font> s_font, s_terminal_font;
   static std::unique_ptr<blur_filter> s_blur_filter;
   static std::unique_ptr<bloom> s_fx_bloom;
 
@@ -208,7 +208,7 @@ namespace mr
     {
       const float t = float(y - min_y) / (max_y - min_y);
 
-      grid_cell cell;
+      character_cell cell;
       cell.set(get_random_glyph(s.x, y),
                {s_string_color * t, t * s_depth_layers_fade[s.layer_index]},
                vec2f{float(s.x), float(y)} * cell_size,
@@ -219,7 +219,7 @@ namespace mr
 
     // Set the head color (y == max_y)
     // For the head I use alpha = 1.0f for every layer
-    grid_cell head;
+    character_cell head;
     head.set(get_random_glyph(s.x, max_y),
              {s_string_head_color, 1.0f},
              vec2f{float(s.x), float(max_y)} * cell_size,
@@ -235,7 +235,6 @@ namespace mr
       init_falling_string(s, view_height);
   }
 
-
   static void render_debug_gui()
   {
 #ifdef DEBUG
@@ -249,7 +248,6 @@ namespace mr
     ImGui::DragFloat("Bloom Threshold", &s_bloom_threshold, 0.01f, 0.1f, 5.0f);
     ImGui::DragFloat("Bloom Knee", &s_bloom_knee, 0.0f, 0.0f, 0.5f);
     ImGui::DragFloat("Blur Str Multiplier", &s_blur_str_multiplier, 0.0f, 0.0f, 1.0f);
-    ImGui::ColorEdit3("Terminal Color", s_terminal_color.components.data(), ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
     ImGui::ColorEdit3("String Color", s_string_color.components.data(), ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
     ImGui::ColorEdit3("String Head Color", s_string_head_color.components.data(), ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
 
@@ -294,8 +292,8 @@ namespace mr
 
   static void render_terminal(const float dt)
   {
-    // Starting position
-    static constexpr vec2f s_start_pos = {1.0f, 2.0f};
+
+    static constexpr float s_font_size = 1.0f;
 
     auto [w, h] = get_window_size();
     auto [vw, vh] = get_view_size();
@@ -307,15 +305,21 @@ namespace mr
 
     // Fill the string
     s_terminal_cells.clear();
-    vec2f pos = s_start_pos;
+
+    const std::string_view current_line{s_terminal_lines[state.cur_line].data(), state.cur_char + 1};
+    float str_width = 0.0f;
+    for (const auto ch : current_line)
+      str_width += s_terminal_font->find_glyph(ch).norm_advance * s_font_size;
+
+    vec2f pos = vec2f{vw - str_width, vh - s_font_size} / 2.0f;
 
     for (auto ch : std::string_view(s_terminal_lines[state.cur_line].data(), state.cur_char + 1))
     {
-      const auto &g = s_font->find_glyph(ch);
-      grid_cell cell;
-      cell.set(g, {s_terminal_color, 1.0f}, pos, 1.0f);
+      const auto &g = s_terminal_font->find_glyph(ch);
+      character_cell cell;
+      cell.set(g, {s_string_color, 1.0f}, pos, s_font_size);
       s_terminal_cells.push_back(std::move(cell));
-      pos[0] += g.norm_advance;
+      pos[0] += g.norm_advance * s_font_size;
     }
 
     // Render
@@ -328,7 +332,7 @@ namespace mr
     glClearColor(0, 0, 0, 1);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    render_characters(s_terminal_cells, vw, vh);
+    render_characters(s_terminal_cells, *(s_terminal_font.get()), vw, vh);
 
     auto tx_bloom = s_fx_bloom->compute(s_tx_final_render, s_bloom_threshold, s_bloom_knee);
 
@@ -363,13 +367,13 @@ namespace mr
     }
   }
 
-  static void render_characters(const std::vector<grid_cell> &cells, const float view_width, const float view_height)
+  static void render_characters(const std::vector<character_cell> &cells, const font& font, const float view_width, const float view_height)
   {
     // Rendering falling strings
     glUseProgram(s_prg_strings);
 
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, s_font->get_texture());
+    glBindTexture(GL_TEXTURE_2D, font.get_texture());
 
     glUniform1f(glGetUniformLocation(s_prg_strings, "uScreenWidth"), view_width);
     glUniform1f(glGetUniformLocation(s_prg_strings, "uScreenHeight"), view_height);
@@ -377,7 +381,7 @@ namespace mr
 
     glBindVertexArray(s_va);
     glBindBuffer(GL_ARRAY_BUFFER, s_vb);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(grid_cell) * cells.size(), cells.data(), GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(character_cell) * cells.size(), cells.data(), GL_DYNAMIC_DRAW);
 
     glDrawArrays(GL_TRIANGLES, 0, cells.size() * 6);
   }
@@ -414,7 +418,7 @@ namespace mr
     glClear(GL_COLOR_BUFFER_BIT);
 
     // Render and blur background layers (size - 1) to a texture
-    
+
     for (size_t i = 0; i < s_depth_layers.size() - 1; ++i)
     {
       const auto &current_grid = s_grids[i];
@@ -438,15 +442,13 @@ namespace mr
       glDrawArrays(GL_TRIANGLES, 0, 6);
 
       // Render the current layer
-      render_characters(current_grid, view_width, view_height);
+      render_characters(current_grid, *(s_font.get()), view_width, view_height);
 
       // Blur the current texture
       s_blur_filter->apply(tx_dst, (1.0f - s_depth_layers[i]) * s_blur_str_multiplier, 1);
 
       std::swap(tx_dst, tx_src);
     }
-    
-    
 
     // Render background + top layer
     {
@@ -468,14 +470,12 @@ namespace mr
       glBindVertexArray(s_va_quad);
       glDrawArrays(GL_TRIANGLES, 0, 6);
 
-      render_characters(s_grids.back(), view_width, view_height);
+      render_characters(s_grids.back(), *(s_font.get()), view_width, view_height);
     }
 
     const auto tx_bloom = s_fx_bloom->compute(s_tx_final_render, s_bloom_threshold, s_bloom_knee);
 
     render_hdr_to_screen(s_tx_final_render, tx_bloom);
-
-
   }
 
   static void resize()
@@ -515,16 +515,15 @@ namespace mr
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-
     // Init vertex array
     glGenVertexArrays(1, &s_va);
     glGenBuffers(1, &s_vb);
 
     glBindVertexArray(s_va);
     glBindBuffer(GL_ARRAY_BUFFER, s_vb);
-    
+
     // TODO: this is interesting. So basically, on integrated cards, if I don't preallocate this buffer,
-    // memory is going to grow over 1 GB in the first 20 seconds of the program, and then decreses to 100mb. Probably if the buffer 
+    // memory is going to grow over 1 GB in the first 20 seconds of the program, and then decreses slowly to 100mb. Probably if the buffer
     // is not big enough, it keeps reallocating it and then the memory is freed after a few seconds.
     // Anyway, this should be fixed by initially allocating a buffer that is big enough to contain all the geometry.
     // So here it is. I'm overshooting a bit, but I'm sure that this is enough.
@@ -544,9 +543,12 @@ namespace mr
     s_prg_pass_trough = load_program(embed::s_vs_fullscreen, embed::s_fs_pass_trough);
     s_prg_hdr = load_program(embed::s_vs_fullscreen, embed::s_fs_hdr);
 
-    // Load font
+    // Load fonts
     s_font = std::make_unique<font>();
     s_font->load(embed::s_font.data(), embed::s_font.size());
+
+    s_terminal_font = std::make_unique<font>();
+    s_terminal_font->load(embed::s_terminal_font.data(), embed::s_terminal_font.size());
 
     // Blur filter
     s_blur_filter = std::make_unique<blur_filter>();
@@ -598,11 +600,12 @@ namespace mr
   static void terminate(const int32_t exit_code)
   {
     // Force destructors before glfwTerminate (otherwise they cause segmentation fault)
+    s_terminal_font = nullptr;
     s_font = nullptr;
     s_blur_filter = nullptr;
     s_fx_bloom = nullptr;
 
-    // Destroy OpenGL context and all the resources associated with it
+    // Destroy window, OpenGL context and all the resources associated with it
     glfwTerminate();
     exit(exit_code);
   }
@@ -611,8 +614,8 @@ namespace mr
 
   static void on_key(GLFWwindow *, std::int32_t, std::int32_t, std::int32_t, std::int32_t)
   {
-      if(s_config.exit_on_input && clock_t::now() - s_start_time > s_exit_on_input_delay)
-        terminate(0);
+    if (s_config.exit_on_input && clock_t::now() - s_start_time > s_exit_on_input_delay)
+      terminate(0);
   }
 
   static void on_cursor_pos(GLFWwindow *, double, double)

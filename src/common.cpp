@@ -12,12 +12,11 @@
 namespace mr
 {
 
-  namespace rng 
+  namespace rng
   {
     static std::mt19937 s_rng_engine;
     static std::uniform_real_distribution<float> s_rng_dist(0.0f, 1.0f);
 
-    //float next() { return s_rng_dist(s_rng_engine); }
     float next() { return s_rng_dist(s_rng_engine); }
 
   }
@@ -35,7 +34,6 @@ namespace mr
       for (const auto d : defines)
       {
         std::stringstream ss;
-        ;
         ss << "#define " << d.data() << '\n';
         src.insert(pos, ss.str());
       }
@@ -129,15 +127,14 @@ namespace mr
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(vec2f), 0);
 
-    return std::tuple{va, vb};
+    return {va, vb};
   }
 
-  void grid_cell::set(const glyph &g, const vec4f &c, const vec2f &pos, const float size)
+  void character_cell::set(const glyph &g, const vec4f &c, const vec2f &pos, const float size)
   {
     // Same color for every vertex, easy
     for (auto &v : vertices)
       v.color = c;
-
 
     // Uv coming directly from the glyph
     vertices[0].uv = {g.uv0[0], g.uv1[1]};
@@ -146,7 +143,6 @@ namespace mr
     vertices[3].uv = {g.uv0[0], g.uv0[1]};
     vertices[4].uv = {g.uv1[0], g.uv0[1]};
     vertices[5].uv = {g.uv1[0], g.uv1[1]};
-
 
     /* This works as follows:
       - The given position "pos" is supposed to be in view coordinates
@@ -177,7 +173,7 @@ namespace mr
 
   enable_scope::~enable_scope()
   {
-    for (const auto [bit, enabled] : m_bits)
+    for (const auto &[bit, enabled] : m_bits)
       enabled ? glEnable(bit) : glDisable(bit);
   }
 
