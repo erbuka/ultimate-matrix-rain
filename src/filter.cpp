@@ -160,6 +160,8 @@ namespace mr
     glBindFramebuffer(GL_FRAMEBUFFER, m_fb_render_target);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_tx_downsample[0], 0);
 
+    glViewport(0, 0, m_width, m_height);
+
     glClearColor(0, 0, 0, 1);
     glClear(GL_COLOR_BUFFER_BIT);
 

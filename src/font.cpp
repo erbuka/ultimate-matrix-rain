@@ -22,15 +22,14 @@ namespace mr
       "0123456789"
       ". ";
 
-  // I can make this function consteval in gcc, while VS is complaining that 
+  // I can make this function consteval in gcc, while MSVC is complaining that 
   // a "call to immediate function is not a constant expression".
   // From what I understand consteval just means that this is an immediate function
   // and I should be able to call it even from a non-constexpr context
   static /* consteval */ auto get_code_points()
   {
     std::array<std::int32_t, s_characters.size()> ret = {0};
-    std::ranges::transform(s_characters, ret.begin(), [](const char c)
-                           { return static_cast<std::int32_t>(c); });
+    std::ranges::transform(s_characters, ret.begin(), [](const char c) { return static_cast<std::int32_t>(c); });
     return ret;
   };
 
@@ -81,8 +80,8 @@ namespace mr
       {
         const auto &ginfo = range.chardata_for_range[i];
 
-        // It is a classic bitmap, so the origin (0, 0) is a the top left corner, and each glyph coordinates are given
-        // in pixel space. So I need to invert the y-axis to get OpenGL uv coordinates
+        // It is a classic bitmap, so the origin (0, 0) is at the top left corner, and each glyph coordinates are given
+        // in pixel space. So I need to invert the y-axis and normalize to get OpenGL uv coordinates
         m_glyphs.push_back({
           .code_point = range.array_of_unicode_codepoints[i],
           .uv0 = {

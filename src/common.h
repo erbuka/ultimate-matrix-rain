@@ -43,7 +43,7 @@ namespace mr
     }
 
     // Construction from a lower order vector + scalar (GLSL like)
-    constexpr vec(const vec<N - 1, T> &v, T x)
+    constexpr vec(const vec<N - 1, T> &v, const T x)
     {
       static_assert(N > 1);
       std::ranges::copy(v.components, components.begin());
@@ -77,7 +77,7 @@ namespace mr
       return r;
     }
 
-        template <typename S>
+    template <typename S>
     requires std::is_convertible_v<S, T>
     constexpr vec operator/(const S s) const
     {
@@ -121,13 +121,12 @@ namespace mr
   std::tuple<GLuint, GLuint> create_full_screen_quad();
   GLuint load_program(const std::string_view vs_source, const std::string_view fs_source, const std::initializer_list<std::string_view> &defines = {});
 
-  // Helper class for staking OpenGL enable bits. Standard OpenGL does not support operations like glPush**, so
+  // Helper class for stacking OpenGL enable bits. Things like glPush** are not in core anymore, so
   // this is kind of useful when there are a lot of render passes
   class enable_scope
   {
   private:
-    std::unordered_map<GLenum, bool> m_bits;
-
+    std::unordered_map<GLenum, bool> m_bits; // TODO: could be a vector/array of pairs
   public:
     enable_scope(const std::initializer_list<GLenum> &bits);
     ~enable_scope();
