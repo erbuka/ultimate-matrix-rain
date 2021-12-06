@@ -18,7 +18,8 @@ namespace mr
   static constexpr std::string_view s_characters =
       "abcdefghijklmnopqrstuvwxyz"
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-      "0123456789";
+      "0123456789"
+      ". ";
 
   // I can make this function consteval in gcc, while VS is complaining that 
   // "call to immediate function is not a constant expression"
@@ -29,6 +30,14 @@ namespace mr
                            { return static_cast<std::int32_t>(c); });
     return ret;
   };
+
+  const glyph& font::find_glyph(const int32_t code_point)
+  {
+    const auto it = std::ranges::find_if(m_glyphs, [code_point](const glyph& g) { return g.code_point == code_point; });
+    assert(it != m_glyphs.end());
+    return *it;
+  }
+
 
   void font::load(const unsigned char *font_data, [[maybe_unused]] const size_t length)
   {
@@ -72,6 +81,7 @@ namespace mr
         // Sadly it is a classic bitmap, so point (0, 0) is a the top left corner, and each glyph coordinates are given
         // in pixel space. So I need to invert the y-axis to get OpenGL uv coordinates
         m_glyphs.push_back({
+          .code_point = range.array_of_unicode_codepoints[i],
           .uv0 = {
             float(ginfo.x0) / s_bitmap_width,
             float(ginfo.y1) / s_bitmap_height,
@@ -80,6 +90,7 @@ namespace mr
             float(ginfo.x1) / s_bitmap_width,
             float(ginfo.y0) / s_bitmap_height,
           },
+          .norm_advance = ginfo.xadvance / s_font_size,
           .norm_offset = {
             float(ginfo.xoff) / s_font_size,
             float(ginfo.yoff) / s_font_size

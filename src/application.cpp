@@ -28,6 +28,9 @@
 namespace mr
 {
 
+  using namespace std::literals::string_view_literals;
+
+  // Types
   struct falling_string
   {
     std::int32_t x = 0;
@@ -37,7 +40,33 @@ namespace mr
     std::int32_t length = 0;
   };
 
+  struct terminal_state
+  {
+    std::size_t cur_line = 0;
+    std::size_t cur_char = 0;
+    float timer = 0.5f;
+    bool done = false;
+  };
+
   using clock_t = std::chrono::high_resolution_clock;
+
+  // Function declarations
+  static void init_falling_string(falling_string &s, const float view_height);
+  static auto get_window_size();
+  static auto get_view_size();
+  static auto get_mouse_pos();
+  static const glyph &get_random_glyph(const std::int32_t x, const std::int32_t y);
+  static void update_falling_string(falling_string &s, const float dt, const float view_width, const float view_height);
+  static void render_debug_gui();
+  static void render_hdr_to_screen(const GLuint tx_base, const GLuint tx_bloom);
+  static void render_terminal(const float dt);
+  static void render_characters(const std::vector<grid_cell> &cells, const float view_width, const float view_height);
+  static void render_code(const float dt);
+  static void resize();
+  static void initialize();
+  static void terminate(const int32_t exit_code);
+  static void on_window_resize(GLFWwindow *, std::int32_t, std::int32_t);
+  static void on_key(GLFWwindow *, std::int32_t, std::int32_t, std::int32_t, std::int32_t);
 
   // Fixed animation settings
   static constexpr float s_glyph_swaps_per_second = 10.0f; // Number of glyphs swapped per second
@@ -63,6 +92,11 @@ namespace mr
                                                                                        result[i] = s_depth_layers[i] * s_depth_layers[i];
                                                                                      return result;
                                                                                    })();
+
+  static constexpr std::array s_terminal_lines = {
+      "WAKE UP NEO."sv,
+      "THE MATRIX HAS YOU."sv,
+      "FOLLOW THE WHITE RABBIT."sv};
 
   static constexpr auto s_exit_on_input_delay = std::chrono::milliseconds(1500);
 
@@ -105,6 +139,8 @@ namespace mr
   static clock_t::time_point s_start_time;
 
   // Data
+  static terminal_state s_terminal_state;
+  static std::vector<grid_cell> s_terminal_cells;
   static std::array<std::vector<grid_cell>, s_depth_layers.size()> s_grids;
   static std::array<falling_string, s_falling_strings_count> s_falling_strings;
   static std::unique_ptr<font> s_font;
@@ -195,7 +231,134 @@ namespace mr
       init_falling_string(s, view_height);
   }
 
-  static void render_layer(const std::vector<grid_cell> &cells, const float view_width, const float view_height)
+
+  static void render_debug_gui()
+  {
+#ifdef DEBUG
+    // Debug GUI
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    ImGui::Begin("Debug");
+    ImGui::DragFloat("Exposure", &s_exposure, 0.01f, 0.1f, 10.0f);
+    ImGui::DragFloat("Bloom Threshold", &s_bloom_threshold, 0.01f, 0.1f, 5.0f);
+    ImGui::DragFloat("Bloom Knee", &s_bloom_knee, 0.0f, 0.0f, 0.5f);
+    ImGui::DragFloat("Blur Str Multiplier", &s_blur_str_multiplier, 0.0f, 0.0f, 1.0f);
+    ImGui::ColorEdit3("String Color", s_string_color.components.data(), ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
+    ImGui::ColorEdit3("String Head Color", s_string_head_color.components.data(), ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
+
+    ImGui::End();
+
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+#endif
+  }
+
+  static void render_hdr_to_screen(const GLuint tx_base, const GLuint tx_bloom)
+  {
+    auto [w, h] = get_window_size();
+    // Draw to screen
+    enable_scope scope({GL_BLEND, GL_FRAMEBUFFER_SRGB});
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    glDisable(GL_BLEND);
+    glEnable(GL_FRAMEBUFFER_SRGB);
+
+    glViewport(0, 0, w, h);
+
+    glClearColor(0, 0, 0, 1);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, tx_base);
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, tx_bloom);
+
+    glUseProgram(s_prg_hdr);
+    glUniform1i(glGetUniformLocation(s_prg_hdr, "uTexture"), 0);
+    glUniform1i(glGetUniformLocation(s_prg_hdr, "uBloom"), 1);
+    glUniform1f(glGetUniformLocation(s_prg_hdr, "uExposure"), s_exposure);
+
+    glBindVertexArray(s_va_quad);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+  }
+
+  static void render_terminal(const float dt)
+  {
+    // Starting position
+    static constexpr vec2f s_start_pos = {1.0f, 2.0f};
+
+    auto [w, h] = get_window_size();
+    auto [vw, vh] = get_view_size();
+
+    auto &state = s_terminal_state;
+
+    // Update timer and state
+    state.timer = std::max(0.0f, state.timer - dt);
+
+    // Fill the string
+    s_terminal_cells.clear();
+    vec2f pos = s_start_pos;
+
+    for (auto ch : std::string_view(s_terminal_lines[state.cur_line].data(), state.cur_char + 1))
+    {
+      const auto &g = s_font->find_glyph(ch);
+      grid_cell cell;
+      cell.set(g, {s_string_color, 1.0f}, pos, 1.0f);
+      s_terminal_cells.push_back(std::move(cell));
+      pos[0] += g.norm_advance;
+    }
+
+    // Render
+
+    glBindFramebuffer(GL_FRAMEBUFFER, s_fb_render_target);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, s_tx_final_render, 0);
+
+    glViewport(0, 0, w, h);
+
+    glClearColor(0, 0, 0, 1);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    render_characters(s_terminal_cells, vw, vh);
+
+    auto tx_bloom = s_fx_bloom->compute(s_tx_final_render, s_bloom_threshold, s_bloom_knee);
+
+    // Draw to screen
+    render_hdr_to_screen(s_tx_final_render, tx_bloom);
+
+    if (state.timer == 0.0f)
+    {
+
+      // Check done
+      if (state.cur_line == s_terminal_lines.size() - 1 && state.cur_char == s_terminal_lines[state.cur_line].size() - 1)
+      {
+        state.done = true;
+        return;
+      }
+
+      state.cur_char++;
+      if (state.cur_char == s_terminal_lines[state.cur_line].size())
+      {
+        state.cur_char = 0;
+        state.cur_line++;
+        state.timer = 0.1f;
+      }
+      else if (state.cur_char == s_terminal_lines[state.cur_line].size() - 1)
+      {
+        state.timer = 1.5f;
+      }
+      else
+      {
+        state.timer = 0.1f;
+      }
+    }
+  }
+
+  static void render_characters(const std::vector<grid_cell> &cells, const float view_width, const float view_height)
   {
     // Rendering falling strings
     glUseProgram(s_prg_strings);
@@ -215,20 +378,20 @@ namespace mr
   }
 
   // TODO: implement scanlines (like old terminal)?
-  static void render(const float dt)
+  static void render_code(const float dt)
   {
     const auto [w, h] = get_window_size();
 
     constexpr float view_width = s_col_count;
     const float view_height = h / w * view_width;
 
-    // Clear grids 
+    // Clear grids
     for (auto &g : s_grids)
       g.clear();
 
     // Swap some glyphs
     // TODO: It's not 100% correct but it's ok
-    if(rng::next() < s_glyph_swaps_per_second * dt) 
+    if (rng::next() < s_glyph_swaps_per_second * dt)
       s_font->swap_glyphs(1);
 
     // Update all the falling strings
@@ -269,7 +432,7 @@ namespace mr
       glDrawArrays(GL_TRIANGLES, 0, 6);
 
       // Render the current layer
-      render_layer(current_grid, view_width, view_height);
+      render_characters(current_grid, view_width, view_height);
 
       // Blur the current texture
       s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale, (1.0f - s_depth_layers[i]) * s_blur_str_multiplier, 1);
@@ -280,7 +443,7 @@ namespace mr
     // Render background + top layer
     {
 
-      glBindFramebuffer(GL_FRAMEBUFFER, s_tx_final_render);
+      glBindFramebuffer(GL_FRAMEBUFFER, s_fb_render_target);
       glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, s_tx_final_render, 0);
 
       glViewport(0, 0, w, h);
@@ -297,60 +460,14 @@ namespace mr
       glBindVertexArray(s_va_quad);
       glDrawArrays(GL_TRIANGLES, 0, 6);
 
-      render_layer(s_grids.back(), view_width, view_height);
+      render_characters(s_grids.back(), view_width, view_height);
     }
 
     const auto tx_bloom = s_fx_bloom->compute(s_tx_final_render, s_bloom_threshold, s_bloom_knee);
 
-    // Draw to screen
-    {
-      enable_scope scope({GL_BLEND, GL_FRAMEBUFFER_SRGB});
+    render_hdr_to_screen(s_tx_final_render, tx_bloom);
 
-      glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-      glDisable(GL_BLEND);
-      glEnable(GL_FRAMEBUFFER_SRGB);
-
-      glViewport(0, 0, w, h);
-
-      glClearColor(0, 0, 0, 1);
-      glClear(GL_COLOR_BUFFER_BIT);
-
-      glActiveTexture(GL_TEXTURE0);
-      glBindTexture(GL_TEXTURE_2D, s_tx_final_render);
-
-      glActiveTexture(GL_TEXTURE1);
-      glBindTexture(GL_TEXTURE_2D, tx_bloom);
-
-      glUseProgram(s_prg_hdr);
-      glUniform1i(glGetUniformLocation(s_prg_hdr, "uTexture"), 0);
-      glUniform1i(glGetUniformLocation(s_prg_hdr, "uBloom"), 1);
-      glUniform1f(glGetUniformLocation(s_prg_hdr, "uExposure"), s_exposure);
-
-      glBindVertexArray(s_va_quad);
-      glDrawArrays(GL_TRIANGLES, 0, 6);
-    }
-
-#ifdef DEBUG
-    // Debug GUI
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
-    ImGui::Begin("Debug");
-    ImGui::DragFloat("Exposure", &s_exposure, 0.01f, 0.1f, 10.0f);
-    ImGui::DragFloat("Bloom Threshold", &s_bloom_threshold, 0.01f, 0.1f, 5.0f);
-    ImGui::DragFloat("Bloom Knee", &s_bloom_knee, 0.0f, 0.0f, 0.5f);
-    ImGui::DragFloat("Blur Str Multiplier", &s_blur_str_multiplier, 0.0f, 0.0f, 1.0f);
-    ImGui::ColorEdit3("String Color", s_string_color.components.data(), ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
-    ImGui::ColorEdit3("String Head Color", s_string_head_color.components.data(), ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
-
-    ImGui::End();
-
-    ImGui::Render();
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-#endif
   }
 
   static void resize()
@@ -472,11 +589,11 @@ namespace mr
     exit(exit_code);
   }
 
-  static void on_window_resize(GLFWwindow*, std::int32_t, std::int32_t) { resize(); }
+  static void on_window_resize(GLFWwindow *, std::int32_t, std::int32_t) { resize(); }
 
   static void on_key(GLFWwindow *, std::int32_t, std::int32_t, std::int32_t, std::int32_t)
   {
-      terminate(0);
+    terminate(0);
   }
 
   static void on_cursor_pos(GLFWwindow *, double, double)
@@ -536,7 +653,13 @@ namespace mr
       prev_time = current_time;
 
       /* Render here */
-      render(delta.count());
+      // render(delta.count());
+      if (s_terminal_state.done)
+        render_code(delta.count());
+      else
+        render_terminal(delta.count());
+
+      render_debug_gui();
 
       /* Swap front and back buffers */
       glfwSwapBuffers(s_window);

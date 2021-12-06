@@ -78,6 +78,7 @@ namespace mr
     }
 
     constexpr auto operator[](size_t i) const { return components[i]; }
+    auto& operator[](size_t i) { return components[i]; }
   };
 
   using vec2f = vec<2, float>;

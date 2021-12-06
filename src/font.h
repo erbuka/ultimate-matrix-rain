@@ -12,10 +12,13 @@ namespace mr
 
   struct glyph
   {
+    int32_t code_point;
+
     vec2f uv0, uv1;
-    // The glyph offset relative to the origin, normalized by font size
+
+    // This values are basically the same given by stb_freetype, but normalized by the font size
+    float norm_advance;
     vec2f norm_offset;
-    // The glyph size normalized with the font size
     vec2f norm_size; 
   };
 
@@ -36,6 +39,7 @@ namespace mr
     void load(const std::string_view file_name);
     GLuint get_texture() const { return m_texture; }
     const std::vector<glyph> &get_glyphs() const { return m_glyphs; }
+    const glyph& find_glyph(const int32_t code_point);
 
   };
 
