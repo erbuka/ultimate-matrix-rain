@@ -131,7 +131,7 @@ project "MatrixRain"
         "vendor/stb"
     }
 
-    files { "src/**.cpp" }
+    files { "src/**.cpp", "src/**.h" }
 
     links { "Glad", "GLFW" }
 
