@@ -21,7 +21,9 @@ namespace mr
       "0123456789";
 
   // I can make this function consteval in gcc, while VS is complaining that 
-  // "call to immediate function is not a constant expression"
+  // a "call to immediate function is not a constant expression".
+  // From what I understand consteval just means that this is an immediate function
+  // and I should be able to call it even from a non-constexpr context
   static /* consteval */ auto get_code_points()
   {
     std::array<std::int32_t, s_characters.size()> ret = {0};

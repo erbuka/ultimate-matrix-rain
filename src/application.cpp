@@ -114,7 +114,8 @@ namespace mr
   // Randomly initialize a falling string. I just use the stantard rand(), it's enough for this project
   static void init_falling_string(falling_string &s, const float view_height)
   {
-    const float t = rand() / float(RAND_MAX);
+    // Ugh this is bad: so rand() can actually be equal to RAND_MAX
+    const float t = (rand() % RAND_MAX) / float(RAND_MAX);
 
     s.layer_index = static_cast<std::size_t>(t * t * s_depth_layers.size());
     s.speed = s_falling_string_min_speed + rand() % (s_falling_string_max_speed - s_falling_string_min_speed);
@@ -247,6 +248,7 @@ namespace mr
     glClear(GL_COLOR_BUFFER_BIT);
 
     // Render and blur background layers (size - 1) to a texture
+    
     for (size_t i = 0; i < s_depth_layers.size() - 1; ++i)
     {
       const auto &current_grid = s_grids[i];
@@ -277,6 +279,8 @@ namespace mr
 
       std::swap(tx_dst, tx_src);
     }
+    
+    
 
     // Render background + top layer
     {
@@ -380,6 +384,7 @@ namespace mr
     }
 
     s_fx_bloom->resize(w, h);
+    s_blur_filter->resize(w / s_blur_scale, h / s_blur_scale);
   }
 
   static void initialize()
@@ -390,12 +395,21 @@ namespace mr
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+
     // Init vertex array
     glGenVertexArrays(1, &s_va);
     glGenBuffers(1, &s_vb);
 
     glBindVertexArray(s_va);
     glBindBuffer(GL_ARRAY_BUFFER, s_vb);
+    
+    // TODO: this is interesting. So basically, on integrated cards, if I don't preallocate this buffer,
+    // memory is going to grow over 1 GB in the first 20 seconds of the program. Probably if the buffer 
+    // is not big enough, it keeps reallocating it and then the memory is freed after a few seconds.
+    // Anyway, this should be fixed by initially allocating a buffer that is big enough to contain all the geometry.
+    // So here it is. I'm overshooting a bit, but I'm sure that this is enough.
+    constexpr std::size_t prealloc_size = 6 * sizeof(vertex) * s_falling_strings_count * (s_falling_string_max_length + 1);
+    glBufferData(GL_ARRAY_BUFFER, prealloc_size, nullptr, GL_DYNAMIC_DRAW);
 
     glEnableVertexAttribArray(0);
     glEnableVertexAttribArray(1);
@@ -477,7 +491,8 @@ namespace mr
 
   static void on_key(GLFWwindow *, std::int32_t, std::int32_t, std::int32_t, std::int32_t)
   {
-      terminate(0);
+      if(s_config.exit_on_input && clock_t::now() - s_start_time > s_exit_on_input_delay)
+        terminate(0);
   }
 
   static void on_cursor_pos(GLFWwindow *, double, double)
