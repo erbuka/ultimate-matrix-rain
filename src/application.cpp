@@ -111,22 +111,20 @@ namespace mr
   static std::unique_ptr<blur_filter> s_blur_filter;
   static std::unique_ptr<bloom> s_fx_bloom;
 
-  // Randomly initialize a falling string. I just use the stantard rand(), it's enough for this project
   static void init_falling_string(falling_string &s, const float view_height)
   {
-    const float t = rand() / float(RAND_MAX);
+    const float t = rng::next();
 
     s.layer_index = static_cast<std::size_t>(t * t * s_depth_layers.size());
-    s.speed = s_falling_string_min_speed + rand() % (s_falling_string_max_speed - s_falling_string_min_speed);
-    s.length = s_falling_string_min_length + rand() % (s_falling_string_max_length - s_falling_string_min_length);
+    s.speed = rng::next(s_falling_string_min_speed, s_falling_string_max_speed);
+    s.length = rng::next(s_falling_string_min_length, s_falling_string_max_length);
 
     // Number of columns depends on the depth
     const int32_t col_count = s_col_count / s_depth_layers[s.layer_index];
-    s.x = rand() % col_count;
+    s.x = rng::next(0, col_count);
 
-    // TODO: try to still improve this
     // The initial y position is actually randomized to be off screen.
-    s.y = -(s.length + rand() % static_cast<std::int32_t>(view_height / s_depth_layers[s.layer_index]));
+    s.y = -(s.length + rng::next(0, static_cast<std::int32_t>(view_height / s_depth_layers[s.layer_index])));
   }
 
   static auto get_window_size()
@@ -216,6 +214,7 @@ namespace mr
     glDrawArrays(GL_TRIANGLES, 0, cells.size() * 6);
   }
 
+  // TODO: implement scanlines (like old terminal)?
   static void render(const float dt)
   {
     const auto [w, h] = get_window_size();
@@ -229,7 +228,7 @@ namespace mr
 
     // Swap some glyphs
     // TODO: It's not 100% correct but it's ok
-    if(rand() / static_cast<float>(RAND_MAX) < s_glyph_swaps_per_second * dt) 
+    if(rng::next() < s_glyph_swaps_per_second * dt) 
       s_font->swap_glyphs(1);
 
     // Update all the falling strings

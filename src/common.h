@@ -14,6 +14,19 @@
 namespace mr
 {
 
+  namespace rng
+  {
+    float next();
+
+    template<typename T> 
+    requires std::floating_point<T> || std::integral<T>
+    T next(const T min, const T max)
+    {
+      return min + static_cast<T>((max - min) * next());
+    }
+
+  }
+
   struct glyph;
 
   // Generic vector type, just testing some C++20 concepts

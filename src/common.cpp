@@ -1,5 +1,6 @@
 #include "common.h"
 
+#include <random>
 #include <string>
 #include <sstream>
 
@@ -10,6 +11,16 @@
 
 namespace mr
 {
+
+  namespace rng 
+  {
+    static std::mt19937 s_rng_engine;
+    static std::uniform_real_distribution<float> s_rng_dist(0.0f, 1.0f);
+
+    //float next() { return s_rng_dist(s_rng_engine); }
+    float next() { return s_rng_dist(s_rng_engine); }
+
+  }
 
   static std::string inject_defines_into_source(const std::string_view source, const std::initializer_list<std::string_view> &defines)
   {

@@ -123,8 +123,8 @@ namespace mr
   {
     for(std::size_t i = 0; i < count; ++i)
     {
-      const std::size_t idx0 = rand() % m_glyphs.size();
-      const std::size_t idx1 = rand() % m_glyphs.size();
+      const std::size_t idx0 = rng::next(std::size_t{0}, m_glyphs.size());
+      const std::size_t idx1 = rng::next(std::size_t{0}, m_glyphs.size());
       std::swap(m_glyphs[idx0], m_glyphs[idx1]);
     }
   }
