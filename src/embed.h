@@ -3,8 +3,8 @@
 #include <array>
 
 // Embed resources into executable (shaders, fonts). 
-// I wish there was a better way to do this cross platform
-// Have to wait for std::embed (http://open-std.org/JTC1/SC22/WG21/docs/papers/2020/p1040r6.html)
+// No, I'm not using resource files
+ 
 namespace mr::embed
 {
 

@@ -51,17 +51,20 @@ namespace mr
   using clock_t = std::chrono::high_resolution_clock;
 
   // Function declarations
-  static void init_falling_string(falling_string &s, const float view_height);
   static auto get_window_size();
   static auto get_view_size();
   static auto get_mouse_pos();
+  
   static const glyph &get_random_glyph(const std::int32_t x, const std::int32_t y);
+  static void init_falling_string(falling_string &s, const float view_height);
   static void update_falling_string(falling_string &s, const float dt, const float view_width, const float view_height);
+
   static void render_debug_gui();
-  static void render_hdr_to_screen(const GLuint tx_base, const GLuint tx_bloom);
-  static void render_terminal(const float dt);
   static void render_characters(const std::vector<grid_cell> &cells, const float view_width, const float view_height);
+  static void render_terminal(const float dt);
   static void render_code(const float dt);
+  static void render_hdr_to_screen(const GLuint tx_base, const GLuint tx_bloom);
+  
   static void resize();
   static void initialize();
   static void terminate(const int32_t exit_code);
@@ -69,7 +72,7 @@ namespace mr
   static void on_key(GLFWwindow *, std::int32_t, std::int32_t, std::int32_t, std::int32_t);
 
   // Fixed animation settings
-  static constexpr float s_glyph_swaps_per_second = 10.0f; // Number of glyphs swapped per second
+  static constexpr float s_glyph_swaps_per_second = 10.0f; // Number of glyphs swapped per second (roughly)
   static constexpr std::int32_t s_blur_scale = 1;
   static constexpr std::int32_t s_col_count = 80;
   static constexpr std::int32_t s_falling_strings_count = 1500;
@@ -94,9 +97,9 @@ namespace mr
                                                                                    })();
 
   static constexpr std::array s_terminal_lines = {
-      "WAKE UP NEO."sv,
-      "THE MATRIX HAS YOU."sv,
-      "FOLLOW THE WHITE RABBIT."sv};
+      "WAKE UP NEO"sv,
+      "THE MATRIX HAS YOU"sv,
+      "FOLLOW THE WHITE RABBIT"sv};
 
   static constexpr auto s_exit_on_input_delay = std::chrono::milliseconds(1500);
 
@@ -110,7 +113,7 @@ namespace mr
   static GLuint s_va = 0; // Vertex Array
   static GLuint s_vb = 0; // Vertex Buffer
 
-  // Framebuffer
+  // Generic framebuffer to render to a texture
   static GLuint s_fb_render_target = 0;
 
   // Final render texture
@@ -120,7 +123,7 @@ namespace mr
   static GLuint s_tx_blur0 = 0;
   static GLuint s_tx_blur1 = 0;
 
-  // Full screen quad vertex array & vertex buffer
+  // Full screen quad vertex array and vertex buffer
   static GLuint s_va_quad = 0;
   static GLuint s_vb_quad = 0;
 
@@ -130,7 +133,8 @@ namespace mr
   static float s_bloom_knee = 0.5f;
   static float s_blur_str_multiplier = 0.5f;
 
-  // Falling strings color palette
+  // Colors
+  static vec3f s_terminal_color = {0.1f, 0.6f, 0.2f};
   static vec3f s_string_color = {0.1f, 1.5f, 0.2f};
   static vec3f s_string_head_color = {0.7f, 1.0f, 0.7f};
 
@@ -245,6 +249,7 @@ namespace mr
     ImGui::DragFloat("Bloom Threshold", &s_bloom_threshold, 0.01f, 0.1f, 5.0f);
     ImGui::DragFloat("Bloom Knee", &s_bloom_knee, 0.0f, 0.0f, 0.5f);
     ImGui::DragFloat("Blur Str Multiplier", &s_blur_str_multiplier, 0.0f, 0.0f, 1.0f);
+    ImGui::ColorEdit3("Terminal Color", s_terminal_color.components.data(), ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
     ImGui::ColorEdit3("String Color", s_string_color.components.data(), ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
     ImGui::ColorEdit3("String Head Color", s_string_head_color.components.data(), ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float);
 
@@ -308,7 +313,7 @@ namespace mr
     {
       const auto &g = s_font->find_glyph(ch);
       grid_cell cell;
-      cell.set(g, {s_string_color, 1.0f}, pos, 1.0f);
+      cell.set(g, {s_terminal_color, 1.0f}, pos, 1.0f);
       s_terminal_cells.push_back(std::move(cell));
       pos[0] += g.norm_advance;
     }
@@ -409,6 +414,7 @@ namespace mr
     glClear(GL_COLOR_BUFFER_BIT);
 
     // Render and blur background layers (size - 1) to a texture
+    
     for (size_t i = 0; i < s_depth_layers.size() - 1; ++i)
     {
       const auto &current_grid = s_grids[i];
@@ -435,10 +441,12 @@ namespace mr
       render_characters(current_grid, view_width, view_height);
 
       // Blur the current texture
-      s_blur_filter->apply(tx_dst, w / s_blur_scale, h / s_blur_scale, (1.0f - s_depth_layers[i]) * s_blur_str_multiplier, 1);
+      s_blur_filter->apply(tx_dst, (1.0f - s_depth_layers[i]) * s_blur_str_multiplier, 1);
 
       std::swap(tx_dst, tx_src);
     }
+    
+    
 
     // Render background + top layer
     {
@@ -476,7 +484,7 @@ namespace mr
     const auto [w, h] = get_window_size();
     const auto [vw, vh] = get_view_size();
 
-    // Initilize falling strings
+    // (Re)Initilize falling strings
     for (auto &s : s_falling_strings)
       init_falling_string(s, vh);
 
@@ -496,6 +504,7 @@ namespace mr
     }
 
     s_fx_bloom->resize(w, h);
+    s_blur_filter->resize(w / s_blur_scale, h / s_blur_scale);
   }
 
   static void initialize()
@@ -506,12 +515,21 @@ namespace mr
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+
     // Init vertex array
     glGenVertexArrays(1, &s_va);
     glGenBuffers(1, &s_vb);
 
     glBindVertexArray(s_va);
     glBindBuffer(GL_ARRAY_BUFFER, s_vb);
+    
+    // TODO: this is interesting. So basically, on integrated cards, if I don't preallocate this buffer,
+    // memory is going to grow over 1 GB in the first 20 seconds of the program, and then decreses to 100mb. Probably if the buffer 
+    // is not big enough, it keeps reallocating it and then the memory is freed after a few seconds.
+    // Anyway, this should be fixed by initially allocating a buffer that is big enough to contain all the geometry.
+    // So here it is. I'm overshooting a bit, but I'm sure that this is enough.
+    constexpr std::size_t prealloc_size = 6 * sizeof(vertex) * s_falling_strings_count * (s_falling_string_max_length + 1);
+    glBufferData(GL_ARRAY_BUFFER, prealloc_size, nullptr, GL_DYNAMIC_DRAW);
 
     glEnableVertexAttribArray(0);
     glEnableVertexAttribArray(1);
@@ -579,7 +597,7 @@ namespace mr
 
   static void terminate(const int32_t exit_code)
   {
-    // Force destructors before glfwTerminate (otherwise it causes segmentaion fault)
+    // Force destructors before glfwTerminate (otherwise they cause segmentation fault)
     s_font = nullptr;
     s_blur_filter = nullptr;
     s_fx_bloom = nullptr;
@@ -593,7 +611,8 @@ namespace mr
 
   static void on_key(GLFWwindow *, std::int32_t, std::int32_t, std::int32_t, std::int32_t)
   {
-    terminate(0);
+      if(s_config.exit_on_input && clock_t::now() - s_start_time > s_exit_on_input_delay)
+        terminate(0);
   }
 
   static void on_cursor_pos(GLFWwindow *, double, double)

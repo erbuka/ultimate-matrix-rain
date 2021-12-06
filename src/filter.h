@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cinttypes>
 #include <cstdlib>
 #include <glad/glad.h>
 #include <vector>
@@ -21,7 +22,8 @@ namespace mr
   public:
     blur_filter();
     ~blur_filter();
-    void apply(const GLuint target, const int32_t width, const int32_t height, const float strength, const std::size_t iterations);
+    void resize(const std::int32_t width, const std::int32_t height);
+    void apply(const GLuint target, const float strength, const std::size_t iterations);
   };
 
 

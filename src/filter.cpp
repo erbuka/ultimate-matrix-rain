@@ -11,8 +11,6 @@
 namespace mr
 {
 
-
-
   blur_filter::blur_filter()
   {
     glGenFramebuffers(1, &m_framebuffer);
@@ -39,7 +37,13 @@ namespace mr
     glDeleteProgram(m_prg_vblur);
   }
 
-  void blur_filter::apply(const GLuint target, const int32_t width, const int32_t height, const float strength, const std::size_t iterations)
+  void blur_filter::resize(const std::int32_t width, const std::int32_t height)
+  {
+    glBindTexture(GL_TEXTURE_2D, m_ping_pong);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
+  }
+
+  void blur_filter::apply(const GLuint target, const float strength, const std::size_t iterations)
   {
 
     std::array passes = {
@@ -51,11 +55,8 @@ namespace mr
 
     for (std::size_t it = 0; it < iterations; ++it)
     {
-      for (const auto& [dst, src, program] : passes)
+      for (const auto &[dst, src, program] : passes)
       {
-        glBindTexture(GL_TEXTURE_2D, dst);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
-
         glBindFramebuffer(GL_FRAMEBUFFER, m_framebuffer);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dst, 0);
 

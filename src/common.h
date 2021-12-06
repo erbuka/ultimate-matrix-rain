@@ -104,7 +104,7 @@ namespace mr
     auto begin() { return vertices.begin(); }
     auto end() { return vertices.end(); }
 
-    /* Updates this character with the given parameters */
+    // Updates this character with the given parameters
     void set(const glyph& g, const vec4f& color, const vec2f& pos, const float size);
 
   };

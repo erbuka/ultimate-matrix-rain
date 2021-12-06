@@ -35,6 +35,7 @@ namespace mr
     // Some characters change from time to time in the original matrix rain, so
     // this is an helper function that swaps randomly the given amount of glyphs
     void swap_glyphs(const std::size_t count);
+    
     void load(const unsigned char* data, const size_t length);
     void load(const std::string_view file_name);
     GLuint get_texture() const { return m_texture; }

@@ -149,12 +149,12 @@ namespace mr
 
 
     /* This works as follows:
-      - The given position "pos" is supposed to in view coordinates
-      - The cell is square of size "size", but the glyph is not a square
-      - This is where the glyph's properties come useful:
+      - The given position "pos" is supposed to be in view coordinates
+      - The cell is square of size "size", but the glyph is not a square, so this 
+        is where the glyph's properties come useful:
         - norm_offset is the offset from glyph origin
         - norm_size is the actual size of the glyph
-      - These properties are normalized in [0, 1] so we can easily scale them by the cell size
+        These properties are normalized in [0, 1] so we can easily scale them by the cell size
     */
     const float fx = pos[0] + g.norm_offset[0] * size;
     const float fy = pos[1] + g.norm_offset[1] * size;
