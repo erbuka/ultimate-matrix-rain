@@ -142,7 +142,9 @@ project "MatrixRain"
       warnings "Extra"
 
     filter "system:windows"
+        defines { "MR_WINDOWS" }
         links { "opengl32" }
 
     filter "system:linux"
+        defines { "MR_LINUX" }
         links { "GL", "X11", "pthread", "dl" }
