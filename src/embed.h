@@ -3,7 +3,8 @@
 #include <array>
 
 // Embed resources into executable (shaders, fonts).
-// No, I'm not using resource files
+// Not the best way but, at least it's cross platform
+// generated on linux with xxd -i -cols 32 {src_file}
 
 namespace mr::embed
 {

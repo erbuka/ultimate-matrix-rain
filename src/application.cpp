@@ -31,6 +31,12 @@ namespace mr
 
   using namespace std::literals::string_view_literals;
 
+  enum class scenes
+  {
+    terminal,
+    code
+  };
+
   // Types
   struct falling_string
   {
@@ -46,7 +52,6 @@ namespace mr
     std::size_t cur_line = 0;
     std::size_t cur_char = 0;
     float timer = 0.5f;
-    bool done = false; // TODO: use global state
   };
 
   using clock_t = std::chrono::high_resolution_clock;
@@ -61,7 +66,7 @@ namespace mr
   static void update_falling_string(falling_string &s, const float dt, const float view_width, const float view_height);
 
   static void render_debug_gui();
-  static void render_characters(const std::vector<character_cell> &cells, const font& font, const float view_width, const float view_height);
+  static void render_characters(const std::vector<character_cell> &cells, const font &font, const float view_width, const float view_height);
   static void render_terminal(const float dt);
   static void render_code(const float dt);
   static void render_hdr_to_screen(const GLuint tx_base, const GLuint tx_bloom);
@@ -97,9 +102,10 @@ namespace mr
   })();
 
   static constexpr std::array s_terminal_lines = {
-      "Wake up Neo"sv,
-      "The Matrix has you"sv,
-      "Follow the white rabbit"sv};
+      "Wake up, Neo..."sv,
+      "The Matrix has you..."sv,
+      "Follow the white rabbit."sv,
+      "Knock, knock, Neo."sv};
 
   static constexpr auto s_exit_on_input_delay = std::chrono::milliseconds(1500);
 
@@ -142,6 +148,7 @@ namespace mr
   static clock_t::time_point s_start_time;
 
   // Data
+  static scenes s_scene = scenes::terminal;
   static terminal_state s_terminal_state;
   static std::vector<character_cell> s_terminal_cells;
   static std::array<std::vector<character_cell>, s_depth_layers.size()> s_grids;
@@ -344,7 +351,7 @@ namespace mr
       // Check done
       if (state.cur_line == s_terminal_lines.size() - 1 && state.cur_char == s_terminal_lines[state.cur_line].size() - 1)
       {
-        state.done = true;
+        s_scene = scenes::code;
         return;
       }
 
@@ -353,7 +360,7 @@ namespace mr
       {
         state.cur_char = 0;
         state.cur_line++;
-        state.timer = 0.1f;
+        state.timer = rng::next(0.02f, 0.2f);
       }
       else if (state.cur_char == s_terminal_lines[state.cur_line].size() - 1)
       {
@@ -361,12 +368,12 @@ namespace mr
       }
       else
       {
-        state.timer = 0.1f;
+        state.timer = rng::next(0.02f, 0.2f);
       }
     }
   }
 
-  static void render_characters(const std::vector<character_cell> &cells, const font& font, const float view_width, const float view_height)
+  static void render_characters(const std::vector<character_cell> &cells, const font &font, const float view_width, const float view_height)
   {
     // Rendering falling strings
     glUseProgram(s_prg_strings);
@@ -385,7 +392,6 @@ namespace mr
     glDrawArrays(GL_TRIANGLES, 0, cells.size() * 6);
   }
 
-  // TODO: implement scanlines (like old terminal)?
   static void render_code(const float dt)
   {
     const auto [w, h] = get_window_size();
@@ -521,8 +527,8 @@ namespace mr
     glBindVertexArray(s_va);
     glBindBuffer(GL_ARRAY_BUFFER, s_vb);
 
-    // TODO: this is interesting. So basically, on integrated cards, if I don't preallocate this buffer,
-    // memory is going to grow over 1 GB in the first 20 seconds of the program, and then decreses slowly to 100mb. Probably if the buffer
+    // On integrated cards, if I don't preallocate this buffer, memory is going to grow over 1 GB in the
+    // first 20 seconds of the program, and then decreses slowly to 100mb. Probably if the buffer
     // is not big enough, it keeps reallocating it and then the memory is freed after a few seconds.
     // Anyway, this should be fixed by initially allocating a buffer that is big enough to contain all the geometry.
     // So here it is. I'm overshooting a bit, but I'm sure that this is enough.
@@ -675,10 +681,16 @@ namespace mr
 
       /* Render here */
       // render(delta.count());
-      if (s_terminal_state.done)
-        render_code(delta.count());
-      else
+
+      switch (s_scene)
+      {
+      case scenes::terminal:
         render_terminal(delta.count());
+        break;
+      case scenes::code:
+        render_code(delta.count());
+        break;
+      }
 
       render_debug_gui();
 

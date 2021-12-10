@@ -20,7 +20,7 @@ namespace mr
       "abcdefghijklmnopqrstuvwxyz"
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
       "0123456789"
-      ". ";
+      "., ";
 
   // I can make this function consteval in gcc, while MSVC is complaining that 
   // a "call to immediate function is not a constant expression".

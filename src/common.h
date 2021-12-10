@@ -126,7 +126,7 @@ namespace mr
   class enable_scope
   {
   private:
-    std::unordered_map<GLenum, bool> m_bits; // TODO: could be a vector/array of pairs
+    std::unordered_map<GLenum, bool> m_bits; // TODO: Could be a vector/array of pairs
   public:
     enable_scope(const std::initializer_list<GLenum> &bits);
     ~enable_scope();
