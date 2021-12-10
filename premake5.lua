@@ -1,6 +1,6 @@
 workspace "MatrixRain"
     architecture "x86_64"
-    configurations { "Debug", "Release" }
+    configurations { "Debug", "Release", "Win64ScreenSaver" }
     startproject "MatrixRain"
     location(_ACTION)
 
@@ -13,6 +13,11 @@ workspace "MatrixRain"
         symbols "Off"
         optimize "Full"
 
+
+    filter "configurations:Win64ScreenSaver"
+      defines { "WIN64_SCREEN_SAVER" }
+      symbols "Off"
+      optimize "Full"
 
     filter "system:windows"
         systemversion "latest"
@@ -135,6 +140,8 @@ project "MatrixRain"
 
     links { "Glad", "GLFW" }
 
+    filter "configurations:Win64ScreenSaver"  
+      targetextension ".scr"
 
     filter "configurations:Debug"
       links { "ImGui" }
