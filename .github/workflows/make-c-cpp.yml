@@ -13,5 +13,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: init
+      run: git submodule init && git submodule update
     - name: make
       run: cd ./gmake2 && make config=release
