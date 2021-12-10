@@ -83,19 +83,18 @@ namespace mr
   static constexpr std::int32_t s_falling_string_max_speed = 30;
 
   static constexpr std::array<float, 4> s_depth_layers = {
-      0.15,
-      0.30,
-      0.50,
-      1.00,
+      0.15f,
+      0.30f,
+      0.50f,
+      1.00f,
   };
 
-  static constexpr std::array<float, s_depth_layers.size()> s_depth_layers_fade = ([]
-                                                                                   {
-                                                                                     std::array<float, s_depth_layers.size()> result;
-                                                                                     for (size_t i = 0; i < result.size(); ++i)
-                                                                                       result[i] = s_depth_layers[i] * s_depth_layers[i];
-                                                                                     return result;
-                                                                                   })();
+  static constexpr std::array<float, s_depth_layers.size()> s_depth_layers_fade = ([] {
+    std::array<float, s_depth_layers.size()> result;
+    for (size_t i = 0; i < result.size(); ++i)
+      result[i] = s_depth_layers[i] * s_depth_layers[i];
+    return result;
+  })();
 
   static constexpr std::array s_terminal_lines = {
       "Wake up Neo"sv,
