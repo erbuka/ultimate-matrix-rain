@@ -319,7 +319,9 @@ namespace mr
 
     vec2f pos = vec2f{vw - str_width, vh - s_font_size} / 2.0f;
 
-    for (auto ch : std::string_view(s_terminal_lines[state.cur_line].data(), state.cur_char + 1))
+    const std::string_view terminal_str(s_terminal_lines[state.cur_line].data(), state.cur_char + 1);
+
+    for (auto ch : terminal_str)
     {
       const auto &g = s_terminal_font->find_glyph(ch);
       character_cell cell;
