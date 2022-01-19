@@ -142,6 +142,8 @@ namespace mr
   // Colors
   static vec3f s_string_color = {0.1f, 1.5f, 0.2f};
   static vec3f s_string_head_color = {0.7f, 1.0f, 0.7f};
+  static vec3f s_terminal_color = s_string_color * 0.75f;
+
 
   // Config
   static launch_config s_config;
@@ -317,13 +319,15 @@ namespace mr
     for (const auto ch : current_line)
       str_width += s_terminal_font->find_glyph(ch).norm_advance * s_font_size;
 
-    vec2f pos = vec2f{vw - str_width, vh - s_font_size} / 2.0f;
+    //vec2f pos = vec2f{vw - str_width, vh - s_font_size} / 2.0f;
+
+    vec2f pos = { static_cast<float>(vw) / s_col_count, static_cast<float>(vw) / s_col_count };
 
     for (auto ch : current_line)
     {
       const auto &g = s_terminal_font->find_glyph(ch);
       character_cell cell;
-      cell.set(g, {s_string_color, 1.0f}, pos, s_font_size);
+      cell.set(g, {s_terminal_color, 1.0f}, pos, s_font_size);
       s_terminal_cells.push_back(std::move(cell));
       pos[0] += g.norm_advance * s_font_size;
     }
@@ -351,23 +355,28 @@ namespace mr
       // Check done
       if (state.cur_line == s_terminal_lines.size() - 1 && state.cur_char == s_terminal_lines[state.cur_line].size() - 1)
       {
+        // Goto main scene
         s_scene = scenes::code;
         return;
       }
 
+      // Increase the current character
       state.cur_char++;
       if (state.cur_char == s_terminal_lines[state.cur_line].size())
       {
+        // Start a new line at the next iteration
         state.cur_char = 0;
         state.cur_line++;
         state.timer = rng::next(0.02f, 0.2f);
       }
       else if (state.cur_char == s_terminal_lines[state.cur_line].size() - 1)
       {
+        // Wait a bit longer before starting a new line
         state.timer = 1.5f;
       }
       else
       {
+        // Next character
         state.timer = rng::next(0.02f, 0.2f);
       }
     }
