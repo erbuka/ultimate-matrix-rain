@@ -45,7 +45,7 @@ jobs:
     - name: Make
       working-directory: ${{env.TOOL_CHAIN}}
       env:
-        CC: gcc-10
-        CXX: g++-10
+        CC: gcc-11
+        CXX: g++-11
       run: |
         make config=release
