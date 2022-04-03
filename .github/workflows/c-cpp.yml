@@ -32,6 +32,7 @@ jobs:
         
     - name: Libraries and headers
       run: |
+        sudo apt-get update
         sudo apt install xorg-dev
         
     - name: Make
