@@ -29,13 +29,13 @@ jobs:
     - name: Run premake
       working-directory: ${{env.GITHUB_WORKSPACE}}
       run: |
-        premake5 ${{TOOL_CHAIN}}
+        premake5 ${{env.TOOL_CHAIN}}
 
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v1.0.2
     
     - name: Build
-      working-directory: ${{env.GITHUB_WORKSPACE}}/${{TOOL_CHAIN}}
+      working-directory: ${{env.GITHUB_WORKSPACE}}/${{env.TOOL_CHAIN}}
       # Add additional options to the MSBuild command line here (like platform or verbosity level).
       # See https://docs.microsoft.com/visualstudio/msbuild/msbuild-command-line-reference
       run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} .
