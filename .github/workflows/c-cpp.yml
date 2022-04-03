@@ -42,4 +42,4 @@ jobs:
         CC: gcc-11
         CXX: g++-11
       run: |
-        make config=release
+        make config=${{env.BUILD_CONFIGURATION}}
