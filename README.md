@@ -1,7 +1,7 @@
 # Ultimate Matrix Rain
 
-[![MSBuild](https://github.com/erbuka/ultimate-matrix-rain/actions/workflows/msbuild.yml/badge.svg)](https://github.com/erbuka/ultimate-matrix-rain/actions/workflows/msbuild.yml)
-[![C/C++ CI](https://github.com/erbuka/ultimate-matrix-rain/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/erbuka/ultimate-matrix-rain/actions/workflows/c-cpp.yml)
+[![Windows](https://github.com/erbuka/ultimate-matrix-rain/actions/workflows/msbuild.yml/badge.svg)](https://github.com/erbuka/ultimate-matrix-rain/actions/workflows/msbuild.yml)
+[![Linux](https://github.com/erbuka/ultimate-matrix-rain/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/erbuka/ultimate-matrix-rain/actions/workflows/c-cpp.yml)
 
 A C++/OpenGL implementation of the [Matrix digital rain](https://en.wikipedia.org/wiki/Matrix_digital_rain)
 
