@@ -1,0 +1,40 @@
+name: C/C++ CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  TOOL_CHAIN: vs2022
+  BUILD_CONFIGURATION: release
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: 'true'
+
+    - name: Setup premake
+      uses: abel0b/setup-premake@v2
+      with:
+        version: "5.0.0-beta1"
+    
+    - name: Run premake
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: |
+        premake5 ${{env.TOOL_CHAIN}}
+        
+    - name: Libraries and headers
+      run: |
+        sudo apt install xorg-dev
+        
+    - name: Make
+      working-directory: ${{env.TOOL_CHAIN}}
+      run: |
+        make config=release
